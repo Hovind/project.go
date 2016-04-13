@@ -8,18 +8,10 @@ import (
     "project.go/order"
     . "project.go/obj"
 )
-/*
-const (
-    INIT = iota
-    IDLE
-    RUN
-    DOOR_OPEN
-)*/
 
 const (
     N_FLOORS = 4
     N_BUTTONS = 3
-    DOOR_TIMEOUT = 3
 )
 
 func Manager(push_light_channel, pop_light_channel chan<- Order, open_door_channel, direction_channel, check_stop_channel chan<- int) (chan<- Order, chan<- int, chan<- int) {
