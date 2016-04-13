@@ -1,11 +1,10 @@
 package elev
 import (
     "project.go/io"
+    . "project.go/obj"
 )
 
-type Order struct {
-    Button, Floor int
-}
+
 
 const (
     DOWN                = -1 + iota
@@ -182,12 +181,15 @@ func checkOrderButtons(localOrderCh chan Order) {
 func Button_checker() <-chan Order {
     local_order_channel := make(chan Order);
     go func() {
+        previous_button_signal := [4][3]bool{};
         for {
             for floor := 0; floor < N_FLOORS; floor++ {
                 for button := 0; button < N_BUTTONS; button++ {
-                    if getButtonSignal(button, floor) {
+                    signal := getButtonSignal(button, floor);
+                    if signal && !previous_button_signal[floor][button] {
                         local_order_channel <-Order{Button: button, Floor: floor};
                     }
+                    previous_button_signal[floor][button] = signal;
                 }
             }
         }

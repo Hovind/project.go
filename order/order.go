@@ -37,16 +37,28 @@ func NewOrders(local_addr string) *Orders {
 }
 
 func (self Orders) Print() {
-    fmt.Println("\nLocal address:", self.local_addr, "\nHall", self.hall, "\nCart:", self.carts[self.local_addr].commands, "\nDirection:", self.CurDir(), "\nFloor:", self.CurFloor());
+    fmt.Println("\nLocal address:", self.local_addr)
+    fmt.Println("Hall", self.hall);
+    for key, value := range self.carts {
+        fmt.Println("IP:", key);
+        fmt.Println("Cart:", value.commands);
+    }
+}
+func NewCart() *cart {
+    return &cart{};
 }
 
+func (self Orders) CheckIfCart(addr string) bool {
+    _, ok := self.carts[addr];
+    return ok;
+}
 
-func (self *Orders) addCartToMap(cart *cart, name string){
+func (self *Orders) AddCartToMap(cart *cart, name string){
     self.carts[name] = cart
 }
 
-func (self Orders) CurDir() int {
-    return self.carts[self.local_addr].curDir();
+func (self Orders) CurDir(addr string) int {
+    return self.carts[addr].curDir();
 }
 
 func (self Orders) CurFloor() int {
@@ -79,6 +91,10 @@ func (self *Orders) RemoveHallOrder(floor int, direction int) {
     self.hall[floor][direction] = false;
 }
 
+func (self *Orders) SetHallOrder(floor int, direction int, value bool){
+    self.hall[floor][direction] = value;
+}
+
 func (self Orders) checkIfHallOrder(floor, direction int) bool {
     if direction == -1{
         direction = 1
@@ -88,6 +104,9 @@ func (self Orders) checkIfHallOrder(floor, direction int) bool {
     return self.hall[floor][direction];
 }
 
+func (self *Orders) SetCommand(addr string, floor int, value bool){
+    self.carts[addr].commands[floor] = value;
+}
 
 func (self *Orders) AddCommand(addr string, floor int) {
     self.carts[addr].commands[floor] = true;
@@ -121,8 +140,20 @@ func (self *cart) setDir(direction int) {
 func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
     return  self.carts[self.local_addr].checkIfCommand(orderFloor) ||
             self.checkIfHallOrder(orderFloor, orderDirection) ||
-            orderFloor == N_FLOORS - 1 ||
-            orderFloor == 0;
+            !self.CheckIfOrdersInDirection(orderFloor, orderDirection);
+
+}
+
+func (self Orders) CheckIfOrdersInDirection(floor, direction int) bool {
+    if direction == 0 {
+        return false;
+    }
+    for f := floor + direction; f != N_FLOORS && f != -1; f += direction {
+        if self.carts[self.local_addr].checkIfCommand(f) || self.checkIfHallOrder(f, -1) || self.checkIfHallOrder(f, 1) {
+            return true;
+        }
+    }
+    return false;
 }
 
 func abs(x int) int{
@@ -234,7 +265,7 @@ func (self Orders) GetDirection() int {
         }
         floor += iterateDirection
     }
-    floor = curFloor - self.CurDir();
+    floor = curFloor - curDir;
     for floor < N_FLOORS{
         if floor < 0{
             break;
@@ -253,3 +284,5 @@ func (self Orders) GetDirection() int {
     fmt.Println("Found no orders.")
     return 0;
 }
+
+

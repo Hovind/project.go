@@ -4,6 +4,10 @@ import (
     "net"
 )
 
+type Order struct {
+    Button, Floor int
+}
+
 type Message struct {
     Code int
     Body []byte

@@ -54,7 +54,7 @@ func listening_worker(pop_channel, sync_to_order_channel, from_network_channel c
                         pop_channel <-msg;
                         rcv_channel <-*NewMessage(KEEP_ALIVE, nil, nil, nil);
                     } else {
-                        //fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
+                        fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
                         rcv_channel <-msg;
                     }
                 }
@@ -74,7 +74,7 @@ func send(msg Message, socket *net.UDPConn, addr *net.UDPAddr) (error) {
     if err != nil {
         fmt.Println("Could not send:", err.Error());
     } else {
-        //fmt.Println("Sent message with code", msg.Code, "and body", msg.Body, "to:", addr.String());
+        fmt.Println("Sent message with code", msg.Code, "and body", msg.Body, "to:", addr.String());
     }
     return err;
 }
@@ -101,20 +101,27 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
 
     sync_to_order_channel := make(chan Message);
     sync_request_channel := make(chan chan Message);
-    to_network_channel := make(chan Message);
-    from_network_channel := make(chan Message);
+    to_network_channel := make(chan Message, 10);
+    from_network_channel := make(chan Message, 10);
 
     rcv_channel := listening_worker(pop_channel, sync_to_order_channel, from_network_channel, socket, local_addr);
     go func() {
         head_addr := (*net.UDPAddr)(nil);
         tail_timeout := timer.New();
+        request_timeout := timer.New();
+        alive_timeout := timer.New();
+
+        request_head(local_addr, broadcast_addr, socket);
+        request_timeout.Start(10*time.Second)
         for {
             if head_addr == nil {
-                request_head(local_addr, broadcast_addr, socket);
+                request_timeout.Start(10*time.Second);
                 select {
-                case <-time.After(10 * time.Second):
-                    continue;
+                case <-request_timeout.Timer.C:
+                    request_head(local_addr, broadcast_addr, socket);
+                    request_timeout.Start(10*time.Second)
                 case msg := <-rcv_channel:
+                    request_timeout.Stop();
                     switch msg.Code {
                     case TAIL_REQUEST, HEAD_REQUEST:
                         head_addr = msg.Origin;
@@ -126,15 +133,31 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
                         send(msg, socket, head_addr);
                     }
                 case msg := <-to_network_channel:
+                    msg.Origin = local_addr;
                     from_network_channel <-msg;
                 }
             } else {
+                alive_timeout.Start(2*time.Second);
                 select {
+                case <-tail_timeout.Timer.C:
+                    fmt.Println("Breaking cycle.");
+                    sleep_multiplier := 1;
+                    msg := *NewMessage(TAIL_DEAD, []byte{byte(sleep_multiplier)}, local_addr, nil);
+                    send(msg, socket, head_addr);
+                    head_addr = nil;
+                    time.Sleep(time.Duration(sleep_multiplier)*time.Second);
+                case <-alive_timeout.Timer.C:
+                    msg := *NewMessage(KEEP_ALIVE, nil, local_addr, nil);
+                    send(msg, socket, head_addr);
+                    if !tail_timeout.Running {
+                        tail_timeout.Start(10 * time.Second);
+                    }
                 case msg := <-to_network_channel:
                     msg.Origin = local_addr;
                     push_channel <-msg;
                     send(msg, socket, head_addr);
                 case msg :=  <-rcv_channel:
+                    alive_timeout.Start(1*time.Second);
                     tail_timeout.Stop();
                     switch msg.Code {
                     case KEEP_ALIVE:
@@ -172,21 +195,7 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
                 case msg := <-resend_channel:
                     fmt.Println("Resending message.");
                     send(msg, socket, head_addr);
-                case <-tail_timeout.Timer.C:
-                    fmt.Println("Breaking cycle.");
-                    sleep_multiplier := 1;
-                    msg := *NewMessage(TAIL_DEAD, []byte{byte(sleep_multiplier)}, local_addr, nil);
-                    send(msg, socket, head_addr);
-                    head_addr = nil;
-                    fmt.Println("Sleeping for", sleep_multiplier, "seconds.");
-                    time.Sleep(time.Duration(sleep_multiplier)*time.Second);
-                    fmt.Println("Done sleeping.");
-                case <-time.After(1 * time.Second):
-                    msg := *NewMessage(KEEP_ALIVE, nil, local_addr, nil);
-                    send(msg, socket, head_addr);
-                    if !tail_timeout.Running {
-                        tail_timeout.Start(4 * time.Second);
-                    }
+
                 }
             }
         }
