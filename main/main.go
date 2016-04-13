@@ -23,8 +23,7 @@ const (
 )
 
 func manager(push_light_channel, pop_light_channel chan<- Order, open_door_channel, direction_channel, check_stop_channel chan<- int) (chan<- Order, chan<- int, chan<- int) {
-    local_addr := "heehe";
-    _, from_network_channel, _, _ := network.Manager("33223");
+    local_addr, to_network_channel, from_network_channel, _, _ := network.Manager("33223");
 
     order_channel := make(chan Order);
     check_stop_channel := make(chan int);
