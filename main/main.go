@@ -22,7 +22,7 @@ const (
     DOOR_TIMEOUT = 3
 )
 
-func manager(push_light_channel, pop_light_channel chan<- Order, open_door_channel, direction_channel, check_stop_channel chan<- int) (chan<- Order, chan<- int, chan<- int) {
+func Manager(push_light_channel, pop_light_channel chan<- Order, open_door_channel, direction_channel, check_stop_channel chan<- int) (chan<- Order, chan<- int, chan<- int) {
     local_addr, to_network_channel, from_network_channel, _, _ := network.Manager("33223");
 
     order_channel := make(chan Order);
@@ -74,15 +74,41 @@ func manager(push_light_channel, pop_light_channel chan<- Order, open_door_chann
                 b, err := json.Marshal(order);
                 if err != nil {
                     fmt.Println("Could not marshal order.");
+                } else {
+                    to_network_channel <-*NewMessage(ORDER_PUSH, b, nil, nil);
                 }
-                to_network_channel <-*NewMessage(ORDER_PUSH, b, local_addr, nil);
-            case <-check_stop_channel:
-                 if checkIfStop() {
-                      open_door_channel <-carts[local_addr].Floor;
-                  }
-            case direction_request_channel:
-                direction_channel <-getDirection();
-
+            case floor := <-check_stop_channel:
+                b, err := json.Marshal(floor);
+                if err != nil {
+                    fmt.Println("Could not marshal direction.");
+                } else {
+                    to_network_channel <-*NewMessage(FLOOR_HIT, b, nil, nil);
+                }
+                carts[local_addr].Floor = floor;
+                if checkIfStop() {
+                    order := Order{Button: order.COMMAND, Floor: floor};
+                    b, _ := json.Marshal(order);
+                    to_network_channel <-*NewMessage(ORDER_POP, b, nil, nil);
+                    direction := getDirection();
+                    if direction == elev.UP {
+                        order.Button = order.UP;
+                    } else if direction == elev.DOWN {
+                        order.Button = order.DOWN;
+                    }
+                    b, _ := json.Marshal(order);
+                    to_network_channel <-*NewMessage(ORDER_POP, b, nil, nil);
+                    open_door_channel <-floor;
+                }
+            case <-direction_request_channel:
+                direction := getDirection();
+                b, err := json.Marshal(direction);
+                if err != nil {
+                    fmt.Println ("Could not marshal direction.");
+                } else {
+                    to_network_channel <-*NewMessage(DIRECTION_CHANGE, b, nil, nil);
+                }
+                carts[local_addr].Direction = direction;
+                direction_channel <-direction;
             }
         }
     }();
@@ -103,7 +129,7 @@ func main() {
     open_door_channel := make(chan int);
     direction_channel := make(chan int);
 
-    order_channel, direction_request_channel := manager(push_light_channel, pop_light_channel, open_door_channel, direction_channel);
+    order_channel, direction_request_channel := Manager(push_light_channel, pop_light_channel, open_door_channel, direction_channel);
 
     for {
         select {
