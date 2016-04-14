@@ -23,8 +23,7 @@ const (
 )
 
 func manager(push_light_channel, pop_light_channel chan<- Order, open_door_channel, direction_channel, check_stop_channel chan<- int) (chan<- Order, chan<- int, chan<- int) {
-    local_addr := "heehe";
-    _, from_network_channel, _, _ := network.Manager("33223");
+    local_addr, _, from_network_channel, _, _ := network.Manager("33223");
 
     order_channel := make(chan Order);
     check_stop_channel := make(chan int);
@@ -106,6 +105,18 @@ func main() {
 
     order_channel, direction_request_channel := manager(push_light_channel, pop_light_channel, open_door_channel, direction_channel);
 
+    go func() {
+        for {
+            selct {
+            case floor := <-floor_signal_channel:
+                check_stop_channel <-floor;
+            case order := <-button_channel:
+                if door_open && door_open_floor == order.Floor {
+                    door_timer.Start(3*time.Second);
+                } else {
+                    order_channel <-order;
+                }
+
     for {
         select {
         case order := <-push_light_channel:
@@ -118,14 +129,6 @@ func main() {
             elev.SetMotorDirection(0);
         case direction := <-direction_channel:
             elev.SetMotorDirection(direction);
-        case floor := <-floor_signal_channel:
-            check_stop_channel <-floor;
-        case order := <-button_channel:
-            if door_open && door_open_floor == order.Floor {
-                door_timer.Start(3*time.Second);
-            } else {
-                order_channel <-order;
-            }
         case <-door_timer.Timer.C:
             door_open = false;
             elev.SetDoorOpenLamp(false);
@@ -133,3 +136,12 @@ func main() {
         }
     }
 }
+
+func input_manager() {
+    go func() {
+        for {
+            select {
+            case order := <-button_channel:
+                asd;
+            case floor := elev.Floor_checker();
+            case direction := 

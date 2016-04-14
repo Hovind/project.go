@@ -28,7 +28,7 @@ func resolve_local_addr(broadcast_addr *net.UDPAddr, broadcast_port string) *net
     return local_addr;
 }
 
-func listening_worker(pop_channel, sync_to_order_channel chan<- Message, socket *net.UDPConn, local_addr *net.UDPAddr) (<-chan Message) {
+func listening_worker(pop_channel, sync_to_order_channel, from_network_channel chan<- Message, socket *net.UDPConn, local_addr *net.UDPAddr) (<-chan Message) {
     local_addrs, _ := net.InterfaceAddrs();
 
     rcv_channel := make(chan Message);
@@ -43,8 +43,15 @@ func listening_worker(pop_channel, sync_to_order_channel chan<- Message, socket 
                 msg := Message{};
                 err := json.Unmarshal(b[:n], &msg);
                 if err != nil {
-                        fmt.Println("Could not unmarshal message.");
-                } else if addr_is_remote(local_addrs, addr) && n > 0 {
+                    fmt.Println("Could not unmarshal message.");
+                    break;
+                }
+                if msg.Code < SYNC_CART {
+                    from_network_channel <-msg;
+                } else if msg.Code == SYNC_CART {
+                    sync_to_order_channel <-msg;
+                }
+                if addr_is_remote(local_addrs, addr) && n > 0 {
                     if msg.Origin.IP.String() == local_addr.IP.String() {
                         //sync_to_order_channel <-msg; IMPLEMENT SYNC
                         pop_channel <-msg;
@@ -80,7 +87,7 @@ func request_head(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn) 
     return send(msg, socket, broadcast_addr);
 }
 
-func Manager(broadcast_port string) (chan<- Message, <-chan Message, <-chan Message, <-chan chan Message) {
+func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-chan Message, <-chan chan Message) {
     broadcast_addr, _ := net.ResolveUDPAddr("udp4", net.IPv4bcast.String() + ":" + broadcast_port);
     local_addr := resolve_local_addr(broadcast_addr, broadcast_port);
 
@@ -88,7 +95,7 @@ func Manager(broadcast_port string) (chan<- Message, <-chan Message, <-chan Mess
     socket, err := net.ListenUDP("udp4", listen_addr);
     if err != nil {
         fmt.Println("Could not create socket:", err.Error());
-        return nil, nil, nil, nil;
+        return "", nil, nil, nil, nil;
     } else {
         fmt.Println("Socket has been created:", socket.LocalAddr().String());
     }
@@ -97,19 +104,23 @@ func Manager(broadcast_port string) (chan<- Message, <-chan Message, <-chan Mess
 
     sync_to_order_channel := make(chan Message);
     sync_request_channel := make(chan chan Message);
-    rcv_channel := listening_worker(pop_channel, sync_to_order_channel, socket, local_addr);
+    to_network_channel := make(chan Message, 10);
+    from_network_channel := make(chan Message, 10);
 
-    to_network_channel := make(chan Message);
-    from_network_channel := make(chan Message);
+    rcv_channel := listening_worker(pop_channel, sync_to_order_channel, from_network_channel, socket, local_addr);
+
     go func() {
         head_addr := (*net.UDPAddr)(nil);
         tail_timeout := timer.New();
+
+        request_head(local_addr, broadcast_addr, socket);
         for {
             if head_addr == nil {
-                request_head(local_addr, broadcast_addr, socket);
                 select {
-                case <-time.After(10 * time.Second):
-                    continue;
+                case msg := <-to_network_channel:
+                    from_network_channel <-msg;
+                case <-time.After(4 * time.Second):
+                    request_head(local_addr, broadcast_addr, socket);
                 case msg := <-rcv_channel:
                     switch msg.Code {
                     case TAIL_REQUEST, HEAD_REQUEST:
@@ -161,7 +172,6 @@ func Manager(broadcast_port string) (chan<- Message, <-chan Message, <-chan Mess
                         close(sync_from_order_channel);
                         send(msg, socket, head_addr);
                     default:
-                        from_network_channel <-msg;
                         send(msg, socket, head_addr);
                     }
                 case msg := <-resend_channel:
@@ -186,5 +196,5 @@ func Manager(broadcast_port string) (chan<- Message, <-chan Message, <-chan Mess
             }
         }
     }();
-    return to_network_channel, from_network_channel, sync_to_order_channel, sync_request_channel;
+    return local_addr.IP.String(), to_network_channel, from_network_channel, sync_to_order_channel, sync_request_channel;
 }
