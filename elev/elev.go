@@ -187,7 +187,7 @@ func Button_checker() <-chan Order {
                 for button := 0; button < N_BUTTONS; button++ {
                     signal := getButtonSignal(button, floor);
                     if signal && !previous_button_signal[floor][button] {
-                        local_order_channel <-Order{Button: button, Floor: floor};
+                        local_order_channel <-Order{Button: button, Floor: floor, Value: true};
                     }
                     previous_button_signal[floor][button] = signal;
                 }

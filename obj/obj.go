@@ -6,6 +6,7 @@ import (
 
 type Order struct {
     Button, Floor int
+    Value bool
 }
 
 type Message struct {
@@ -28,8 +29,7 @@ func (msg *Message) Hash() int {
 }
 
 const (
-    ORDER_PUSH = 100 + iota
-    ORDER_POP
+    ORDER = 100 + iota
     FLOOR_HIT
     DIRECTION_CHANGE
     SYNC_CART

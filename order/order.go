@@ -72,23 +72,7 @@ func (self *Orders) SetFloor(addr string, floor int) {
 	self.carts[self.local_addr].setFloor(floor)
 }
 
-func (self *Orders) AddHallOrder(floor, direction int) {
-	self.hall[floor][direction] = true
-}
 
-func (self *Orders) RemoveHallOrder(floor int, direction int) {
-	if direction == -1 {
-		direction = 1
-	} else {
-		direction = 0
-	}
-	if floor == N_FLOORS-1 {
-		direction = 1
-	} else if floor == 0 {
-		direction = 0
-	}
-	self.hall[floor][direction] = false
-}
 
 func (self *Orders) SetHallOrder(floor int, button int, value bool) {
 	self.hall[floor][button] = value
@@ -105,14 +89,6 @@ func (self Orders) checkIfHallOrder(floor, direction int) bool {
 
 func (self *Orders) SetCommand(addr string, floor int, value bool) {
 	self.carts[addr].commands[floor] = value
-}
-
-func (self *Orders) AddCommand(addr string, floor int) {
-	self.carts[addr].commands[floor] = true
-}
-
-func (self *Orders) RemoveCommand(addr string, floor int) {
-	self.carts[addr].commands[floor] = false
 }
 
 func (self cart) checkIfCommand(floor int) bool {
@@ -268,8 +244,8 @@ func (self Orders) GetDirection() int {
 		if floor < 0 {
 			break
 		} else if self.carts[self.local_addr].checkIfCommand(floor) {
-			return -iterateDirection
 			fmt.Println("Command in -dir, not in dir")
+			return -iterateDirection
 		} else if (self.checkIfHallOrder(floor, iterateDirection) &&
 			(self.orderIsBestForMe(floor, iterateDirection))) ||
 			(self.checkIfHallOrder(floor, -iterateDirection) &&

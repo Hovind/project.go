@@ -1,173 +1,278 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"time"
+    "encoding/json"
+    "fmt"
+    "time"
+    //"os"
 
-	"project.go/elev"
-	"project.go/network"
-	. "project.go/obj"
-	"project.go/order"
-	"project.go/timer"
+    "project.go/elev"
+    "project.go/network"
+    . "project.go/obj"
+    "project.go/order"
+    "project.go/timer"
 )
 
 const (
-	N_FLOORS  = 4
-	N_BUTTONS = 3
+    N_FLOORS  = 4
+    N_BUTTONS = 3
 )
+func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{o order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
+    order_from_network_channel := make(chan struct{o Order; a string});
+    sync_from_network_channel := make(chan struct{o order.Orders; a string});
+    floor_from_network_channel := make(chan struct{v int; a string});
+    direction_from_network_channel := make(chan struct{v int; a string});
+    go func() {
+        for {
+            msg := <-from_network_channel;
+            addr := msg.Origin.IP.String();
 
-func Manager(push_light_channel, pop_light_channel chan<- Order, open_door_channel, direction_channel chan<- int) (chan<- Order, chan<- int, chan<- int) {
-	local_addr, to_network_channel, from_network_channel, _, _ := network.Manager("33223")
+            v, o, err := 0, Order{}, error(nil)
+            switch msg.Code {
+            case ORDER:
+                err = json.Unmarshal(msg.Body, &o)
+            case FLOOR_HIT, DIRECTION_CHANGE:
+                err = json.Unmarshal(msg.Body, &v)
+            }
+            if err != nil {
+                fmt.Println("Could not unmarshal order.")
+                continue;
+            }
+            switch msg.Code {
+            case ORDER:
+                data := struct{o Order; a string}{o, addr}
+                order_from_network_channel <-data;
+            case FLOOR_HIT:
+                data := struct{v int; a string}{v, addr}
+                floor_from_network_channel <-data;
+            case DIRECTION_CHANGE:
+                data := struct{v int; a string}{v, addr}
+                direction_from_network_channel <-data;
+            }
+        }
+    }();
+    return order_from_network_channel, sync_from_network_channel, floor_from_network_channel, direction_from_network_channel;
+}
 
-	order_channel := make(chan Order)
-	check_stop_channel := make(chan int)
-	direction_request_channel := make(chan int)
-	system := order.NewOrders(local_addr)
-	go func() {
-		for {
+func to_network(to_network_channel chan<- Message) (chan<- Order, chan<- order.Orders, chan<- int, chan<- int) {
+    order_to_network_channel := make(chan Order);
+    sync_to_network_channel := make(chan order.Orders);
+    floor_to_network_channel := make(chan int);
+    direction_to_network_channel := make(chan int);
+    go func() {
+        for {
+            select {
+            case order := <- order_to_network_channel:
+                b, err := json.Marshal(order);
+                if err != nil {
+                    fmt.Println("Could not marshal order.");
+                } else {
+                    to_network_channel <-*NewMessage(ORDER, b, nil, nil);    
+                }
+            case floor := <-floor_to_network_channel:
+                b, err := json.Marshal(floor);
+                if err != nil {
+                    fmt.Println("Could not marshal floor.");
+                } else {
+                    to_network_channel <-*NewMessage(FLOOR_HIT, b, nil, nil);    
+                }
+            case direction := <-direction_to_network_channel:
+                b, err := json.Marshal(direction);
+                if err != nil {
+                    fmt.Println("Could not marshal direction.");
+                } else {
+                    to_network_channel <-*NewMessage(DIRECTION_CHANGE, b, nil, nil);    
+                }
+            }
+        }
+    }();
+    return order_to_network_channel, sync_to_network_channel, floor_to_network_channel, direction_to_network_channel;
+}
 
-			//system.Print();
-			select {
-			case msg := <-from_network_channel:
-				addr := msg.Origin.IP.String()
-				if !system.CheckIfCart(addr) {
-					system.AddCartToMap(order.NewCart(), addr)
-				}
-				system.Print()
-				err := (error)(nil)
-				o := Order{}
-				i := 0
-				switch msg.Code {
-				case ORDER_PUSH, ORDER_POP:
-					err = json.Unmarshal(msg.Body, &o)
-				case FLOOR_HIT, DIRECTION_CHANGE:
-					err = json.Unmarshal(msg.Body, &i)
-				}
-				if err != nil {
-					fmt.Println("Could not unmarshal order.")
-					break
-				}
-				switch msg.Code {
-				case ORDER_PUSH, ORDER_POP:
-					value := true
-					if msg.Code == ORDER_PUSH {
-						push_light_channel <- o
-						if system.CurDir(local_addr) == 0 { //  carts[local_addr].Direction == 0 {
-							direction_channel <- system.GetDirection()
-						}
-					} else {
-						value = false
-						pop_light_channel <- o
-					}
-					fmt.Println("Setting, floor:", o.Floor, "button:", o.Button, value)
-					if o.Button == order.COMMAND {
-						system.SetCommand(addr, o.Floor, value)
-					} else {
-						system.SetHallOrder(o.Floor, o.Button, value)
+func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan chan int, chan chan int) {
+    local_addr, to_network_channel, from_network_channel, _, _ := network.Manager("33223")
 
-						//hall[order.Floor][order.Button] = value;
-					}
-				case FLOOR_HIT:
-					system.SetFloor(addr, i)
-					//carts[addr].Floor = i;
-				case DIRECTION_CHANGE:
-					system.SetDir(addr, i)
-					//carts[addr].Direction = i;
-				}
-			case order := <-order_channel:
-				b, err := json.Marshal(order)
-				if err != nil {
-					fmt.Println("Could not marshal order.")
-				} else {
-					to_network_channel <- *NewMessage(ORDER_PUSH, b, nil, nil)
-				}
-			case floor := <-check_stop_channel:
-				b, err := json.Marshal(floor)
-				if err != nil {
-					fmt.Println("Could not marshal direction.")
-				} else {
-					to_network_channel <- *NewMessage(FLOOR_HIT, b, nil, nil)
-				}
-				system.SetFloor(local_addr, floor)
-				//carts[local_addr].Floor = floor;
-				if system.CheckIfStopOnFloor(floor, system.CurDir(local_addr)) {
-					o := Order{Button: order.COMMAND, Floor: floor}
-					b, _ := json.Marshal(o)
-					to_network_channel <- *NewMessage(ORDER_POP, b, nil, nil)
-					fmt.Println("Sending pop, floor:", o.Floor, "button:", o.Button)
-					open_door_channel <- floor
-				}
-			case <-direction_request_channel:
-				direction := system.GetDirection()
-				b, _ := json.Marshal(direction)
-				to_network_channel <- *NewMessage(DIRECTION_CHANGE, b, nil, nil)
-				button := order.UP
-				floor := system.CurFloor()
-				if direction == elev.DOWN {
-					button = order.DOWN
-				}
-				o := Order{Button: button, Floor: floor}
-				b, _ = json.Marshal(o)
-				to_network_channel <- *NewMessage(ORDER_POP, b, nil, nil)
-				fmt.Println("Sending pop, floor:", o.Floor, "button:", o.Button)
-				system.SetDir(local_addr, direction)
-				//carts[local_addr].Direction = direction;
-				direction_channel <- direction
-			}
-		}
-	}()
-	return order_channel, check_stop_channel, direction_request_channel
+
+
+    order_to_network_channel,
+    /*sync_to_network_channel*/_,
+    floor_to_network_channel,
+    direction_to_network_channel := to_network(to_network_channel);
+
+    order_from_network_channel,
+    sync_from_network_channel,
+    floor_from_network_channel,
+    direction_from_network_channel := from_network(from_network_channel);
+
+    order_channel := make(chan Order);
+    floor_channel := make(chan int);
+    stop_request_channel := make(chan chan int);
+    direction_request_channel := make(chan chan int);
+
+    system := order.NewOrders(local_addr)
+    go func() {
+        floor := -1;
+        for {
+            //system.Print();
+            select {
+            case data := <-order_from_network_channel:
+                if !system.CheckIfCart(data.a) {
+                    system.AddCartToMap(order.NewCart(), data.a)
+                }
+                if data.o.Button == order.COMMAND {
+                    if data.a == local_addr {
+                        light_channel <-data.o;
+                    }
+                    system.SetCommand(data.a, data.o.Floor, data.o.Value)
+                } else {
+                    light_channel <-data.o;
+                    system.SetHallOrder(data.o.Floor, data.o.Button, data.o.Value)
+                    //hall[order.Floor][order.Button] = value;
+                }
+            case data := <-sync_from_network_channel:
+                fmt.Println(data)
+            case data := <-floor_from_network_channel:
+                if !system.CheckIfCart(data.a) {
+                    system.AddCartToMap(order.NewCart(), data.a)
+                }
+                system.SetFloor(data.a, data.v)
+            case data := <-direction_from_network_channel:
+                if !system.CheckIfCart(data.a) {
+                    system.AddCartToMap(order.NewCart(), data.a)
+                }
+                system.SetDir(data.a, data.v)
+            case order := <-order_channel:
+                order_to_network_channel <-order;
+            case floor = <-floor_channel:
+                system.SetFloor(local_addr, floor);
+                //carts[local_addr].Floor = floor;
+                floor_to_network_channel <-floor;
+            case response_channel := <-stop_request_channel:
+                if system.CheckIfStopOnFloor(floor, system.CurDir(local_addr)) {
+                    order_to_network_channel <-Order{Button: order.COMMAND, Floor: floor, Value: false}
+                    response_channel <-1
+                } else {
+                    response_channel <-0
+                }
+            case response_channel := <-direction_request_channel:
+                direction := system.GetDirection()
+                system.SetDir(local_addr, direction)
+                direction_to_network_channel <-direction;
+
+                button := order.UP
+                floor := system.CurFloor()
+                if direction == elev.DOWN {
+                    button = order.DOWN
+                }
+                order_to_network_channel <-Order{Button: button, Floor: floor, Value: false}
+                //carts[local_addr].Direction = direction;
+                response_channel <- direction
+            }
+        }
+    }()
+    return order_channel, floor_channel, stop_request_channel, direction_request_channel;
+}
+
+func light_manager() chan<- Order {
+    light_channel := make(chan Order);
+
+    go func() {
+        for {
+            order := <-light_channel;
+            elev.SetButtonLamp(order.Button, order.Floor, order.Value);
+        }
+    }();
+    return light_channel;
 }
 
 func main() {
-	elev.Init()
-	door_open_floor := -1
-	door_open := false
-	door_timer := timer.New()
-	elev.SetMotorDirection(-1)
+    elev.Init();
+    elev.SetMotorDirection(-1);
+    floor := -1;
+    door_open := false;
+    door_timer := timer.New();
 
-	button_channel := elev.Button_checker()
-	floor_signal_channel := elev.Floor_checker()
-	stop_signal_channel := elev.Stop_checker()
+    button_channel := elev.Button_checker();
+    floor_sensor_channel := elev.Floor_checker();
+    stop_button_channel := elev.Stop_checker();
 
-	push_light_channel := make(chan Order)
-	pop_light_channel := make(chan Order)
-	open_door_channel := make(chan int)
-	direction_channel := make(chan int)
-	order_channel, check_stop_channel, direction_request_channel := Manager(push_light_channel, pop_light_channel, open_door_channel, direction_channel)
+    light_channel := light_manager();
+    order_channel, floor_channel, stop_request_channel, direction_request_channel := order_manager(light_channel);
+    for {
+        select {
+        case order := <-button_channel:
+            if door_open && floor == order.Floor {
+                door_timer.Start(3*time.Second);
+            } else {
+                order_channel <-order;
+                if !door_open {    
+                    direction := request(direction_request_channel);
+                    elev.SetMotorDirection(direction);
+                }
+            }
+        case floor = <-floor_sensor_channel:
+            elev.SetFloorIndicator(floor);
+            floor_channel <-floor;
+            stop := request(stop_request_channel);
+            fmt.Println(stop)
+            if stop == 1 {
+                door_open = true;
+                elev.SetMotorDirection(elev.STOP);
+                door_timer.Start(3*time.Second);
+                elev.SetDoorOpenLamp(true);
+            }
+        case <-stop_button_channel:
+            elev.SetMotorDirection(elev.STOP);
+        case <-door_timer.Timer.C:
+            door_open = false;
+            elev.SetDoorOpenLamp(false);
 
-	for {
-		select {
-		case order := <-push_light_channel:
-			elev.SetButtonLamp(order.Button, order.Floor, true)
-		case order := <-pop_light_channel:
-			elev.SetButtonLamp(order.Button, order.Floor, false)
-		case door_open_floor = <-open_door_channel:
-			door_open = true
-			door_timer.Start(3 * time.Second)
-			elev.SetDoorOpenLamp(true)
-			elev.SetMotorDirection(0)
-		case direction := <-direction_channel:
-			if !door_open {
-				elev.SetMotorDirection(direction)
-			}
-		case floor := <-floor_signal_channel:
-			elev.SetFloorIndicator(floor)
-			check_stop_channel <- floor
-		case order := <-button_channel:
-			if door_open && door_open_floor == order.Floor {
-				door_timer.Start(3 * time.Second)
-			} else {
-				order_channel <- order
-			}
-		case <-door_timer.Timer.C:
-			fmt.Println("DOOR TIMEOUT.")
-			door_open = false
-			elev.SetDoorOpenLamp(false)
-			direction_request_channel <- door_open_floor
-		case <-stop_signal_channel:
-			elev.SetMotorDirection(0)
-		}
-	}
+            direction := request(direction_request_channel);
+            elev.SetMotorDirection(direction);
+
+        }
+    }
 }
+
+func request(request_channel chan chan int) int {
+    response_channel := make(chan int);
+    request_channel <-response_channel;
+    value := <-response_channel;
+    close(response_channel);
+    return value;
+}
+/*
+func main() {
+    if len(os.Args) < 2 {
+        fmt.Println("Please specify port.");
+        return;
+    }
+
+    local_addr, to_network_channel, from_network_channel, _, _ := network.Manager(os.Args[1])
+
+
+    to_order_channel, push_light_channel, pop_light_channel, direction_channel, door_channel = order.Manager(local_addr, from_network_channel);
+    input_manager(to_network_channel, to_order_channel);
+    
+    elev.Init()
+    elev.SetMotorDirection(-1)
+    stop_signal_channel := elev.Stop_checker()
+
+    for {
+        select {
+        case order := <-light_channel:
+            elev.SetButtonLamp(order.Button, order.Floor, order.Value)
+        case door_value := <-door_channel:
+            elev.SetDoorOpenLamp(door_value)
+            elev.SetMotorDirection(0)
+        case direction := <-direction_channel:
+            elev.SetMotorDirection(direction)
+        case floor := <-floor_signal_channel:
+            elev.SetFloorIndicator(floor)
+            check_stop_channel <- floor
+        case <-stop_signal_channel:
+            elev.SetMotorDirection(0)
+        }
+    }
+}*/
+
