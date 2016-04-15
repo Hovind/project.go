@@ -148,7 +148,7 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                 //carts[local_addr].Floor = floor;
                 floor_to_network_channel <-floor;
             case response_channel := <-stop_request_channel:
-                if system.CheckIfStopOnFloor(floor, system.CurDir(local_addr)) {
+                if system.CheckIfStopOnFloor(floor, system.CurDir(local_addr)) {//DIFFERENTIATE STOP AND OPEN DOOR?
                     order_to_network_channel <-Order{Button: order.COMMAND, Floor: floor, Value: false}
                     response_channel <-1
                 } else {
@@ -163,6 +163,8 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                 floor := system.CurFloor()
                 if direction == elev.DOWN {
                     button = order.DOWN
+                } else if direction == elev.STOP {
+                    order_to_network_channel <-Order{Button: order.DOWN, Floor: floor, Value: false}
                 }
                 order_to_network_channel <-Order{Button: button, Floor: floor, Value: false}
                 //carts[local_addr].Direction = direction;

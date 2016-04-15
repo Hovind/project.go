@@ -120,6 +120,7 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
 				select {
 				case msg := <-to_network_channel:
 					msg.Origin = local_addr
+					fmt.Println("Network got:", msg)
 					from_network_channel <- msg
 				case <-time.After(4 * time.Second):
 					request_head(local_addr, broadcast_addr, socket)
