@@ -125,7 +125,9 @@ func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
 
 func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
 	if 	self.carts[self.local_addr].checkIfCommand(orderFloor) ||
-		self.checkIfHallOrder(orderFloor, orderDirection) {
+		self.checkIfHallOrder(orderFloor, orderDirection) ||
+		orderFloor == N_FLOORS -1 && self.checkIfHallOrder(orderFloor, -orderDirection) ||
+		orderFloor == 0 && self.checkIfHallOrder(orderFloor, -orderDirection) {
 		return OPEN_DOOR;
 	} else if !self.CheckIfOrdersInDirection(orderFloor, orderDirection) {
 		return STOP;
