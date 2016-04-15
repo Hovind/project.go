@@ -336,7 +336,8 @@ func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
         //clientCost := self.costForClient(cart, orderFloor, orderDirection)
         addedCost := cart.cost(orderFloor, orderDirection) - cart.cost(cart.curFloor(), cart.curDir());//self.addedCostForElevator(cart, orderFloor, orderDirection)
         cost := /*clientCost*3*/ + addedCost*1
-        if cost < lowestCost {
+        fmt.Println("IP:", addr, "Cost:", cost);
+        if cost < lowestCost || cost == lowestCost && addr < bestCart_addr {
             lowestCost = cost
             bestCart_addr = addr
         }
@@ -385,4 +386,15 @@ func (self Orders) GetDirection() int {
     }
     fmt.Println("Found no orders.")
     return 0
+}
+
+func (self *Orders) Sync(s Orders) {
+    for f := range s.hall {
+        for b := range s.hall[f] {
+            s.hall[f][b] = self.hall[f][b];
+        }
+    }
+    for addr, cart := range s.carts {
+        self.carts[addr] = cart;
+    }
 }

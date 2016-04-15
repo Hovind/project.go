@@ -43,17 +43,16 @@ func listening_worker(sync_to_order_channel chan<- Message, socket *net.UDPConn,
                 msg := Message{};
                 err := json.Unmarshal(b[:n], &msg);
                 if err != nil {
-                        fmt.Println("Could not unmarshal message.");
+                    fmt.Println("Could not unmarshal message.");
                 } else if addr_is_remote(local_addrs, addr) && n > 0 {
-                    if msg.Code < SYNC_CART {
-                        fmt.Println("Rcv:", msg);
+                    if msg.Code <= SYNC {
                         from_network_channel <-msg;
                     }
                     if msg.Origin.IP.String() == local_addr.IP.String() {
                         //sync_to_order_channel <-msg; IMPLEMENT SYNC
                         rcv_channel <-*NewMessage(KEEP_ALIVE, nil, nil, nil);
                     } else {
-                        fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
+                        //fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
                         rcv_channel <-msg;
                     }
                 }
@@ -73,7 +72,7 @@ func send(msg Message, socket *net.UDPConn, addr *net.UDPAddr) (error) {
     if err != nil {
         fmt.Println("Could not send:", err.Error());
     } else {
-        fmt.Println("Sent message with code", msg.Code, "and body", msg.Body, "to:", addr.String());
+        //fmt.Println("Sent message with code", msg.Code, "and body", msg.Body, "to:", addr.String());
     }
     return err;
 }
@@ -105,7 +104,6 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
         head_addr := (*net.UDPAddr)(nil);
         tail_timeout := timer.New();
         for {
-            fmt.Println("Head:", head_addr)
             if head_addr == nil {
                 request_head(local_addr, broadcast_addr, socket);
                 select {
@@ -156,13 +154,6 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
                         fmt.Println("Sleeping for", sleep_multiplier, "seconds.");
                         time.Sleep(time.Duration(sleep_multiplier)*time.Second);
                         fmt.Println("Done sleeping.");
-                    case SYNC_CART:
-                        sync_to_order_channel <-msg;
-                        sync_from_order_channel := make(chan Message);
-                        sync_request_channel <-sync_from_order_channel;
-                        msg := <-sync_from_order_channel;
-                        close(sync_from_order_channel);
-                        send(msg, socket, head_addr);
                     default:
                         send(msg, socket, head_addr);
                     }

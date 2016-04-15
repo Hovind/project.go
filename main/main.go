@@ -17,9 +17,9 @@ const (
     N_FLOORS  = 4
     N_BUTTONS = 3
 )
-func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{o order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
+func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{s order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
     order_from_network_channel := make(chan struct{o Order; a string});
-    sync_from_network_channel := make(chan struct{o order.Orders; a string});
+    sync_from_network_channel := make(chan struct{s order.Orders; a string});
     floor_from_network_channel := make(chan struct{v int; a string});
     direction_from_network_channel := make(chan struct{v int; a string});
     go func() {
@@ -27,12 +27,14 @@ func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a
             msg := <-from_network_channel;
             addr := msg.Origin.IP.String();
 
-            v, o, err := 0, Order{}, error(nil)
+            v, o, s, err := 0, Order{}, order.Orders{}, error(nil)
             switch msg.Code {
             case ORDER:
                 err = json.Unmarshal(msg.Body, &o)
-            case FLOOR_HIT, DIRECTION_CHANGE:
+            case FLOOR_UPDATE, DIRECTION_UPDATE:
                 err = json.Unmarshal(msg.Body, &v)
+            case SYNC:
+                err = json.Unmarshal(msg.Body, &s);
             }
             if err != nil {
                 fmt.Println("Could not unmarshal order.")
@@ -42,12 +44,15 @@ func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a
             case ORDER:
                 data := struct{o Order; a string}{o, addr}
                 order_from_network_channel <-data;
-            case FLOOR_HIT:
+            case FLOOR_UPDATE:
                 data := struct{v int; a string}{v, addr}
                 floor_from_network_channel <-data;
-            case DIRECTION_CHANGE:
+            case DIRECTION_UPDATE:
                 data := struct{v int; a string}{v, addr}
                 direction_from_network_channel <-data;
+            case SYNC:
+                data := struct{s order.Orders; a string}{s, addr};
+                sync_from_network_channel <-data;
             }
         }
     }();
@@ -69,19 +74,26 @@ func to_network(to_network_channel chan<- Message) (chan<- Order, chan<- order.O
                 } else {
                     to_network_channel <-*NewMessage(ORDER, b, nil, nil);    
                 }
+            case orders := <-sync_to_network_channel:
+                b, err := json.Marshal(orders);
+                if err != nil {
+                    fmt.Println("Could not marshal order.");
+                } else {
+                    to_network_channel <-*NewMessage(SYNC, b, nil, nil);    
+                }
             case floor := <-floor_to_network_channel:
                 b, err := json.Marshal(floor);
                 if err != nil {
                     fmt.Println("Could not marshal floor.");
                 } else {
-                    to_network_channel <-*NewMessage(FLOOR_HIT, b, nil, nil);    
+                    to_network_channel <-*NewMessage(FLOOR_UPDATE, b, nil, nil);    
                 }
             case direction := <-direction_to_network_channel:
                 b, err := json.Marshal(direction);
                 if err != nil {
                     fmt.Println("Could not marshal direction.");
                 } else {
-                    to_network_channel <-*NewMessage(DIRECTION_CHANGE, b, nil, nil);    
+                    to_network_channel <-*NewMessage(DIRECTION_UPDATE, b, nil, nil);    
                 }
             }
         }
@@ -95,7 +107,7 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
 
 
     order_to_network_channel,
-    /*sync_to_network_channel*/_,
+    sync_to_network_channel,
     floor_to_network_channel,
     direction_to_network_channel := to_network(to_network_channel);
 
@@ -135,7 +147,12 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                     new_order = true;
                 }
             case data := <-sync_from_network_channel:
-                fmt.Println(data)
+                if data.a == local_addr {
+                    system = &data.s;
+                } else {
+                    data.s = *system;
+                    sync_to_network_channel <-data.s;                    
+                }
             case data := <-floor_from_network_channel:
                 if !system.CheckIfCart(data.a) {
                     system.AddCartToMap(order.NewCart(), data.a)

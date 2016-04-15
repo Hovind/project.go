@@ -30,9 +30,9 @@ func (msg *Message) Hash() int {
 
 const (
     ORDER = 100 + iota
-    FLOOR_HIT
-    DIRECTION_CHANGE
-    SYNC_CART
+    FLOOR_UPDATE
+    DIRECTION_UPDATE
+    SYNC
 )
 
 const (
