@@ -17,6 +17,12 @@ const (
 	COMMAND
 )
 
+const (
+	CONTINUE = 0 + iota
+	STOP
+	OPEN_DOOR
+)
+
 type cart struct {
 	floor, direction int
 	commands         [4]bool
@@ -115,7 +121,17 @@ func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
 	return self.carts[self.local_addr].checkIfCommand(orderFloor) ||
 		self.checkIfHallOrder(orderFloor, orderDirection) ||
 		!self.CheckIfOrdersInDirection(orderFloor, orderDirection)
+}
 
+func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
+	if 	self.carts[self.local_addr].checkIfCommand(orderFloor) ||
+		self.checkIfHallOrder(orderFloor, orderDirection) {
+		return OPEN_DOOR;
+	} else if !self.CheckIfOrdersInDirection(orderFloor, orderDirection) {
+		return STOP;
+	} else {
+		return CONTINUE;
+	}
 }
 
 func (self Orders) CheckIfOrdersInDirection(floor, direction int) bool {
