@@ -42,11 +42,13 @@ func NewOrders(local_addr string) *Orders {
 }
 
 func (self Orders) Print() {
-	fmt.Println("\nLocal address:", self.local_addr)
-	fmt.Println("Hall", self.hall)
+	fmt.Println("Local address:", self.local_addr)
+	fmt.Println("Hall\n", self.hall)
 	for key, value := range self.carts {
 		fmt.Println("IP:", key)
 		fmt.Println("Cart:", value.commands)
+		fmt.Println("Floor:", value.floor);
+		fmt.Println("Direction:", value.direction, "\n");
 	}
 }
 func NewCart() *cart {
@@ -71,11 +73,11 @@ func (self Orders) CurFloor() int {
 }
 
 func (self *Orders) SetDir(addr string, direction int) {
-	self.carts[self.local_addr].setDir(direction)
+	self.carts[addr].setDir(direction)
 }
 
 func (self *Orders) SetFloor(addr string, floor int) {
-	self.carts[self.local_addr].setFloor(floor)
+	self.carts[addr].setFloor(floor)
 }
 
 
@@ -225,7 +227,7 @@ func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
 	for addr, cart := range self.carts {
 		clientCost := self.costForClient(cart, orderFloor, orderDirection)
 		addedCost := self.addedCostForElevator(cart, orderFloor, orderDirection)
-		cost := clientCost*1 + addedCost*1
+		cost := clientCost*2 + addedCost*1
 		if cost < lowestCost {
 			lowestCost = cost
 			bestCart_addr = addr

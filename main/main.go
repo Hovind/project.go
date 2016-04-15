@@ -25,7 +25,6 @@ func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a
     go func() {
         for {
             msg := <-from_network_channel;
-            fmt.Println("Network puts:", msg)
             addr := msg.Origin.IP.String();
 
             v, o, err := 0, Order{}, error(nil)
@@ -116,7 +115,7 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
         floor := -1;
         new_order := false;
         for {
-            //system.Print();
+            system.Print();
             select {
             case data := <-order_from_network_channel:
                 if !system.CheckIfCart(data.a) {
@@ -200,13 +199,11 @@ func light_manager() chan<- Order {
 }
 
 func main() {
-    floor := -1;
-    direction := elev.DOWN;
     door_open := false;
     door_timer := timer.New();
 
     elev.Init();
-    elev.SetMotorDirection(direction);
+    elev.SetMotorDirection(elev.DOWN);
 
     button_channel := elev.Button_checker();
     floor_sensor_channel := elev.Floor_checker();
@@ -214,6 +211,8 @@ func main() {
 
     light_channel := light_manager();
     order_channel, floor_channel, stop_request_channel, direction_request_channel, order_request_channel := order_manager(light_channel);
+    
+    floor := -1;
     for {
         select {
         case order := <-button_channel:
@@ -230,6 +229,7 @@ func main() {
             elev.SetFloorIndicator(floor);
             floor_channel <-floor;
             floor_action := request(stop_request_channel);
+            fmt.Println("FLOOR ACTION:", floor_action);
             if floor_action == order.OPEN_DOOR {
                 open_door(door_timer, &door_open);
             } else if floor_action == order.STOP {
