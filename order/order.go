@@ -68,8 +68,8 @@ func (self Orders) CurDir(addr string) int {
 	return self.carts[addr].curDir()
 }
 
-func (self Orders) CurFloor() int {
-	return self.carts[self.local_addr].curFloor()
+func (self Orders) CurFloor(addr string) int {
+	return self.carts[addr].curFloor()
 }
 
 func (self *Orders) SetDir(addr string, direction int) {
@@ -123,6 +123,11 @@ func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
 	return self.carts[self.local_addr].checkIfCommand(orderFloor) ||
 		self.checkIfHallOrder(orderFloor, orderDirection) ||
 		!self.CheckIfOrdersInDirection(orderFloor, orderDirection)
+}
+
+func (self Orders) Alone() bool {
+	fmt.Println("LENGTH:", self.carts)
+	return len(self.carts) == 1;
 }
 
 func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
@@ -195,7 +200,7 @@ func (self Orders) costForClient(cart *cart, orderFloor int, orderDirection int)
 	for floor := cart.curFloor(); floor < N_FLOORS; floor += cart.curDir() {
 		if floor < 0 {
 			break
-		} else if floor == orderFloor && orderDirection == cart.curDir() {
+		} else if floor == orderFloor && orderDirection == cart.curDir() || floor == 0 || floor == N_FLOORS -1 {
 			return abs(cart.curFloor()-floor)*travelTime + stops*stopTime
 		} else if cart.checkIfCommand(floor) {
 			stops += 1
@@ -207,10 +212,10 @@ func (self Orders) costForClient(cart *cart, orderFloor int, orderDirection int)
 	for floor < N_FLOORS {
 		if floor < 0 {
 			if noStops {
-				return cart.curFloor() - orderFloor
+				return abs(cart.curFloor() - orderFloor)*travelTime;
 			}
 			return (abs(cart.curFloor()-turnFloor)+abs(floor-orderFloor)+N_FLOORS-1)*travelTime + stops*stopTime
-		} else if floor == orderFloor && orderDirection == -cart.curDir() {
+		} else if floor == orderFloor && orderDirection == -cart.curDir() || floor == 0 || floor == N_FLOORS -1 {
 			return (abs(cart.curFloor()-turnFloor)+abs(floor-orderFloor))*travelTime + stops*stopTime
 		} else if cart.checkIfCommand(floor) {
 			stops += 1
@@ -221,13 +226,61 @@ func (self Orders) costForClient(cart *cart, orderFloor int, orderDirection int)
 	return 0
 }
 
+
+func (self cart) furthest_command(floor, direction int) {
+	if direction == elev.STOP {
+		return floor;
+	}
+	f := 0;
+	if direction == elev.UP {
+		f = N_FLOORS - 1;
+	}
+	for f != floor {
+		if self.GetCommand(f) {
+			return f;
+		}
+		f -= direction;
+	}
+	return floor;
+}
+
+func sum(commands []int) int {
+	sum := 0;
+	for _, e := range commands {
+		sum += e;
+	}
+	return sum;
+} 
+
+func (self cart) cost(floor, direction int) int {
+	cost := sum(self.commands);
+	turn_floor := self.GetFloor();
+	if self.GetDir() == direction {
+		turn_floor = max(furthest_command(self.GetFloor(), self.GetDir()), floor)
+	} else if self.GetDir() == elev.DOWN {
+		turn_floor = min(furthest_command(self.GetFloor(), self.GetDir()),  floor)
+	}
+	cost += abs(turn_floor - self.GetFloor());
+	
+	last_floor := floor;
+	if self.GetDir() == elev.UP {
+		last_floor = min(furthest_command(turn_floor, -self.GetDir()), floor);
+	} else if self.GetDir() == elev.DOWN {
+		last_floor = max(furthest_command(turn_floor, -self.GetDir()), floor);
+	}
+	cost += abs(last_floor - turn_floor);
+	return cost;
+}
+
+
 func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
 	lowestCost := 300
 	bestCart_addr := ""
 	for addr, cart := range self.carts {
 		clientCost := self.costForClient(cart, orderFloor, orderDirection)
 		addedCost := self.addedCostForElevator(cart, orderFloor, orderDirection)
-		cost := clientCost*2 + addedCost*1
+		cost := clientCost*3 + addedCost*1
+		fmt.Println("IP: ", addr, "Client cost: ", clientCost, "Added cost:", addedCost);
 		if cost < lowestCost {
 			lowestCost = cost
 			bestCart_addr = addr
@@ -253,7 +306,7 @@ func (self Orders) GetDirection() int {
 		} else if (self.checkIfHallOrder(floor, iterateDirection) &&
 			(self.orderIsBestForMe(floor, iterateDirection))) ||
 			(self.checkIfHallOrder(floor, -iterateDirection) &&
-				(self.orderIsBestForMe(floor, -iterateDirection))) {
+			(self.orderIsBestForMe(floor, -iterateDirection))) {
 			fmt.Println("Found order for me in direction")
 			return iterateDirection
 		}

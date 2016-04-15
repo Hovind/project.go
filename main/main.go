@@ -115,7 +115,7 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
         floor := -1;
         new_order := false;
         for {
-            system.Print();
+            //system.Print();
             select {
             case data := <-order_from_network_channel:
                 if !system.CheckIfCart(data.a) {
@@ -159,12 +159,14 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                 }
                 response_channel <-floor_action;
             case response_channel := <-direction_request_channel:
+
+                fmt.Println("Floor:", system.CurFloor(local_addr), "Direction:", system.CurDir(local_addr));
                 direction := system.GetDirection()
                 system.SetDir(local_addr, direction)
                 direction_to_network_channel <-direction;
 
                 button := order.UP
-                floor := system.CurFloor()
+                floor := system.CurFloor(local_addr)
                 if direction == elev.DOWN {
                     button = order.DOWN
                 } else if direction == elev.STOP {
@@ -216,12 +218,8 @@ func main() {
     for {
         select {
         case order := <-button_channel:
-            if floor == order.Floor {
-                if door_open {
-                    door_timer.Start(3*time.Second);
-                } else {//PERHAPS NOT A NECESSITY
-                    open_door(door_timer, &door_open)
-                }
+            if floor == order.Floor && door_open {
+                door_timer.Start(3*time.Second);
             } else {
                 order_channel <-order;
             }
@@ -229,7 +227,6 @@ func main() {
             elev.SetFloorIndicator(floor);
             floor_channel <-floor;
             floor_action := request(stop_request_channel);
-            fmt.Println("FLOOR ACTION:", floor_action);
             if floor_action == order.OPEN_DOOR {
                 open_door(door_timer, &door_open);
             } else if floor_action == order.STOP {

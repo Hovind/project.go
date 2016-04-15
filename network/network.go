@@ -28,7 +28,7 @@ func resolve_local_addr(broadcast_addr *net.UDPAddr, broadcast_port string) *net
     return local_addr;
 }
 
-func listening_worker(pop_channel, sync_to_order_channel chan<- Message, socket *net.UDPConn, local_addr *net.UDPAddr) (<-chan Message, <-chan Message) {
+func listening_worker(pop_channel, sync_to_order_channel chan<- Message, socket *net.UDPConn, local_addr *net.UDPAddr) (chan Message, <-chan Message) {
     local_addrs, _ := net.InterfaceAddrs();
 
     from_network_channel := make(chan Message, 10);
@@ -110,8 +110,9 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
             if head_addr == nil {
                 request_head(local_addr, broadcast_addr, socket);
                 select {
-                case <-time.After(10 * time.Second):
-                    continue;
+                case msg := <-to_network_channel:
+                	msg.Origin = local_addr;
+                	from_network_channel <-msg;
                 case msg := <-rcv_channel:
                     switch msg.Code {
                     case TAIL_REQUEST, HEAD_REQUEST:
@@ -123,6 +124,9 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
                         head_addr = msg.Origin;
                         send(msg, socket, head_addr);
                     }
+                case <-time.After(10 * time.Second):
+                    continue;
+                
                 }
             } else {
                 select {
