@@ -82,6 +82,29 @@ func request_head(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn) 
     return send(msg, socket, broadcast_addr);
 }
 
+func find_network() *net.UDPAddr {
+    for {
+        request_head(local_addr, broadcast_addr, socket);
+        select {
+        case msg := <-rcv_channel:
+            switch msg.Code {
+            case TAIL_REQUEST, HEAD_REQUEST:
+                head_addr = msg.Origin;
+                msg := *NewMessage(CONNECTION, nil, local_addr, msg.Origin);
+                send(msg, socket, head_addr);
+            case CONNECTION:
+                head_addr = msg.Origin;
+                send(msg, socket, head_addr);
+        }
+        case msg := <-to_network_channel:
+            msg.Origin = local_addr;
+            from_network_channel <-msg;
+        case <-time.After(10 * time.Second):
+            continue;
+        
+        }
+}
+
 func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-chan Message, <-chan chan Message) {
     broadcast_addr, _ := net.ResolveUDPAddr("udp4", net.IPv4bcast.String() + ":" + broadcast_port);
     local_addr := resolve_local_addr(broadcast_addr, broadcast_port);
@@ -105,25 +128,6 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
         tail_timeout := timer.New();
         for {
             if head_addr == nil {
-                request_head(local_addr, broadcast_addr, socket);
-                select {
-                case msg := <-rcv_channel:
-                switch msg.Code {
-                case TAIL_REQUEST, HEAD_REQUEST:
-                    head_addr = msg.Origin;
-                    msg := *NewMessage(CONNECTION, nil, local_addr, msg.Origin);
-                    send(msg, socket, head_addr);
-                case CONNECTION:
-                    head_addr = msg.Origin;
-                    send(msg, socket, head_addr);
-                }
-                case msg := <-to_network_channel:
-                    msg.Origin = local_addr;
-                    from_network_channel <-msg;
-                case <-time.After(10 * time.Second):
-                    continue;
-                
-                }
             } else {
                 select {
                 case msg := <-to_network_channel:
