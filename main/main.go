@@ -17,7 +17,7 @@ const (
     N_FLOORS  = 4
     N_BUTTONS = 3
 )
-func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{s order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
+func network_decoder(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{s order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
     order_from_network_channel := make(chan struct{o Order; a string});
     sync_from_network_channel := make(chan struct{s order.Orders; a string});
     floor_from_network_channel := make(chan struct{v int; a string});
@@ -59,7 +59,7 @@ func from_network(from_network_channel <-chan Message) (<-chan struct{o Order; a
     return order_from_network_channel, sync_from_network_channel, floor_from_network_channel, direction_from_network_channel;
 }
 
-func to_network(to_network_channel chan<- Message) (chan<- Order, chan<- order.Orders, chan<- int, chan<- int) {
+func network_encoder(to_network_channel chan<- Message) (chan<- Order, chan<- order.Orders, chan<- int, chan<- int) {
     order_to_network_channel := make(chan Order);
     sync_to_network_channel := make(chan order.Orders);
     floor_to_network_channel := make(chan int);
@@ -102,19 +102,19 @@ func to_network(to_network_channel chan<- Message) (chan<- Order, chan<- order.O
 }
 
 func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan chan int, chan chan int, chan chan int) {
-    local_addr, to_network_channel, from_network_channel, _, _ := network.Manager("33223")
+    local_addr, to_network_channel, from_network_channel := network.Manager("33223")
 
 
 
     order_to_network_channel,
     sync_to_network_channel,
     floor_to_network_channel,
-    direction_to_network_channel := to_network(to_network_channel);
+    direction_to_network_channel := network_encoder(to_network_channel);
 
     order_from_network_channel,
     sync_from_network_channel,
     floor_from_network_channel,
-    direction_from_network_channel := from_network(from_network_channel);
+    direction_from_network_channel := network_decoder(from_network_channel);
 
     order_channel := make(chan Order);
     floor_channel := make(chan int);
@@ -147,7 +147,9 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                     new_order = true;
                 }
             case data := <-sync_from_network_channel:
-                if data.a == local_addr {
+                fmt.Println("SYNC OBJECT:", data.s)
+                fmt.Println(data.s.Addr, "vs", local_addr)
+                if data.s.Addr == local_addr {
                     system.Sync(&data.s, light_channel);
                 } else {
                     data.s.Sync(system, light_channel);
@@ -164,9 +166,21 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                 }
                 system.SetDir(data.a, data.v)
             case order := <-order_channel:
+                if order.Button == 2/*order.COMMAND*/ {
+                    system.SetCommand(local_addr, order.Floor, order.Value)
+                } else {
+                    system.SetHallOrder(order.Floor, order.Button, order.Value)
+                    //hall[order.Floor][order.Button] = value;
+                }
+                if order.Value {
+                    new_order = true;
+                }
+                light_channel <-order;
                 order_to_network_channel <-order;
             case floor = <-floor_channel:
+                fmt.Println("HEELO");
                 system.SetFloor(local_addr, floor);
+                  fmt.Println("HESELO");
                 //carts[local_addr].Floor = floor;
                 floor_to_network_channel <-floor;
             case response_channel := <-stop_request_channel:
