@@ -96,7 +96,7 @@ func (self Orders) checkIfHallOrder(floor, direction int) bool {
         return  self.hall[floor][0] ||
                 self.hall[floor][1]
     }
-    
+
 }
 
 func (self *Orders) SetCommand(addr string, floor int, value bool) {
@@ -122,7 +122,7 @@ func (self *cart) setFloor(floor int) {
 func (self *cart) setDir(direction int) {
     self.direction = direction
 }
-
+/*
 func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
     return self.carts[self.local_addr].checkIfCommand(orderFloor) ||
         self.checkIfHallOrder(orderFloor, orderDirection) ||
@@ -132,21 +132,18 @@ func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
 func (self Orders) Alone() bool {
     fmt.Println("LENGTH:", self.carts)
     return len(self.carts) == 1;
-}
+}*/
 
 func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
     fmt.Println("Floor action on floor", orderFloor, "and direction", orderDirection)
     if  self.carts[self.local_addr].checkIfCommand(orderFloor) ||
         self.checkIfHallOrder(orderFloor, orderDirection) ||
-        orderFloor == N_FLOORS -1 && self.checkIfHallOrder(orderFloor, -orderDirection) ||
-        orderFloor == 0 && self.checkIfHallOrder(orderFloor, -orderDirection) {
-        fmt.Println("Traitor lines.")
+        self.checkIfHallOrder(orderFloor, -orderDirection) &&
+        !self.search_for_orders_in_direction(orderFloor, orderDirection) &&
+        self.carts[self.local_addr].furthest_command(orderFloor, orderDirection) == orderFloor {
         return OPEN_DOOR;
-    } else if !self.CheckIfOrdersInDirection(orderFloor, orderDirection) {
-        return STOP;
     } else if !self.search_for_orders_in_direction(orderFloor, orderDirection) {
-        fmt.Println("You what.");
-        return OPEN_DOOR;
+        return STOP;
     } else {
         return CONTINUE;
     }
@@ -157,12 +154,12 @@ func (self Orders) get_orders_in_direction(floor, direction int) []Order {
     if direction == 0 {
         return orders;
     }
-    for f := floor; f != -1 && f != N_FLOORS; f += direction {
+    for f := floor + direction; f != -1 && f != N_FLOORS; f += direction {
         fmt.Println("Looking for order at floor", f, "and direction", direction);
-        if self.checkIfHallOrder(f, UP) {
+        if self.checkIfHallOrder(f, 1) {
             orders = append(orders, Order{Button: UP, Floor: f, Value: true});
         }
-        if self.checkIfHallOrder(f, DOWN) {
+        if self.checkIfHallOrder(f, -1) {
             orders = append(orders, Order{Button: DOWN, Floor: f, Value: true});
         }
     }
@@ -183,7 +180,7 @@ func (self Orders) search_for_orders_in_direction(floor, direction int) bool {
     return false;
 }
 
-
+/*
 func (self Orders) CheckIfOrdersInDirection(floor, direction int) bool {
     if direction == 0 {
         return false
@@ -258,7 +255,7 @@ func (self Orders) costForClient(cart *cart, orderFloor int, orderDirection int)
         floor -= cart.curDir()
     }
     return 0
-}
+}*/
 
 
 func (self cart) furthest_command(floor, direction int) int {
@@ -301,7 +298,7 @@ func max(a, b int) int {
     } else {
         return b;
     }
-} 
+}
 
 func sign(a int) int {
     if a > 0 {
@@ -344,7 +341,7 @@ func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
     }
     return bestCart_addr == self.local_addr
 }
-
+/*
 func (self Orders) GetDirection() int {
     curDir := self.carts[self.local_addr].curDir()
     curFloor := self.carts[self.local_addr].curFloor()
@@ -386,15 +383,37 @@ func (self Orders) GetDirection() int {
     }
     fmt.Println("Found no orders.")
     return 0
+}*/
+
+func (self Orders) GetDirection() int {
+    direction := self.CurDir(self.local_addr);
+    if direction == 0 {
+        direction = 1
+    }
+    floor := self.CurFloor(self.local_addr);
+    if  self.search_for_orders_in_direction(floor, direction) || self.carts[self.local_addr].furthest_command(floor, direction) != floor {
+        return direction;
+    } else if self.search_for_orders_in_direction(floor, -direction) || self.carts[self.local_addr].furthest_command(floor, -direction) != floor {
+        return -direction;
+    } else {
+        return 0;
+    }
 }
 
-func (self *Orders) Sync(s Orders) {
+func (self *Orders) Sync(s *Orders, light_channel chan<- Order) {
     for f := range s.hall {
         for b := range s.hall[f] {
-            s.hall[f][b] = self.hall[f][b];
+            if s.hall[f][b] {
+                light_channel <-Order{Button: b, Floor: f, Value: true};
+            }
+            s.hall[f][b] = self.hall[f][b] || s.hall[f][b];
+            self.hall[f][b] = s.hall[f][b]
         }
     }
     for addr, cart := range s.carts {
-        self.carts[addr] = cart;
+        if addr != self.local_addr {
+            self.carts[addr] = cart;
+        }
     }
+    s.carts[self.local_addr] = self.carts[self.local_addr];
 }

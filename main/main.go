@@ -72,28 +72,28 @@ func to_network(to_network_channel chan<- Message) (chan<- Order, chan<- order.O
                 if err != nil {
                     fmt.Println("Could not marshal order.");
                 } else {
-                    to_network_channel <-*NewMessage(ORDER, b, nil, nil);    
+                    to_network_channel <-*NewMessage(ORDER, b, nil, nil);
                 }
             case orders := <-sync_to_network_channel:
                 b, err := json.Marshal(orders);
                 if err != nil {
                     fmt.Println("Could not marshal order.");
                 } else {
-                    to_network_channel <-*NewMessage(SYNC, b, nil, nil);    
+                    to_network_channel <-*NewMessage(SYNC, b, nil, nil);
                 }
             case floor := <-floor_to_network_channel:
                 b, err := json.Marshal(floor);
                 if err != nil {
                     fmt.Println("Could not marshal floor.");
                 } else {
-                    to_network_channel <-*NewMessage(FLOOR_UPDATE, b, nil, nil);    
+                    to_network_channel <-*NewMessage(FLOOR_UPDATE, b, nil, nil);
                 }
             case direction := <-direction_to_network_channel:
                 b, err := json.Marshal(direction);
                 if err != nil {
                     fmt.Println("Could not marshal direction.");
                 } else {
-                    to_network_channel <-*NewMessage(DIRECTION_UPDATE, b, nil, nil);    
+                    to_network_channel <-*NewMessage(DIRECTION_UPDATE, b, nil, nil);
                 }
             }
         }
@@ -148,10 +148,10 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                 }
             case data := <-sync_from_network_channel:
                 if data.a == local_addr {
-                    system = &data.s;
+                    system.Sync(&data.s, light_channel);
                 } else {
-                    data.s = *system;
-                    sync_to_network_channel <-data.s;                    
+                    data.s.Sync(system, light_channel);
+                    sync_to_network_channel <-data.s;
                 }
             case data := <-floor_from_network_channel:
                 if !system.CheckIfCart(data.a) {
@@ -229,7 +229,7 @@ func main() {
 
     light_channel := light_manager();
     order_channel, floor_channel, stop_request_channel, direction_request_channel, order_request_channel := order_manager(light_channel);
-    
+
     floor := -1;
     direction := elev.DOWN;
     for {
@@ -254,7 +254,7 @@ func main() {
             elev.SetMotorDirection(elev.STOP);
         case <-door_timer.Timer.C:
             door_open = false;
-            elev.SetDoorOpenLamp(false);            
+            elev.SetDoorOpenLamp(false);
             direction = request(direction_request_channel);
             elev.SetMotorDirection(direction);
         case <-time.After(500*time.Millisecond):

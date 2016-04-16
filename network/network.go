@@ -122,7 +122,6 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message, <-c
                     from_network_channel <-msg;
                 case <-time.After(10 * time.Second):
                     continue;
-                
                 }
             } else {
                 select {
