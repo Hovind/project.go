@@ -35,6 +35,196 @@ type Orders struct {
     carts      map[string]*cart
 }
 
+func network_decoder(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{s order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
+    order_from_network_channel := make(chan struct{o Order; a string});
+    sync_from_network_channel := make(chan struct{s order.Orders; a string});
+    floor_from_network_channel := make(chan struct{v int; a string});
+    direction_from_network_channel := make(chan struct{v int; a string});
+    go func() {
+        for {
+            msg := <-from_network_channel;
+            addr := msg.Origin.IP.String();
+            v, o, s, err := 0, Order{}, order.Orders{}, error(nil)
+            switch msg.Code {
+            case ORDER:
+                err = json.Unmarshal(msg.Body, &o)
+            case FLOOR_UPDATE, DIRECTION_UPDATE:
+                err = json.Unmarshal(msg.Body, &v)
+            case SYNC:
+                err = json.Unmarshal(msg.Body, &s);
+            }
+            if err != nil {
+                fmt.Println("Could not unmarshal order.")
+                continue;
+            }
+            switch msg.Code {
+            case ORDER:
+                data := struct{o Order; a string}{o, addr}
+                order_from_network_channel <-data;
+            case FLOOR_UPDATE:
+                data := struct{v int; a string}{v, addr}
+                floor_from_network_channel <-data;
+            case DIRECTION_UPDATE:
+                data := struct{v int; a string}{v, addr}
+                direction_from_network_channel <-data;
+            case SYNC:
+                data := struct{s order.Orders; a string}{s, addr};
+                sync_from_network_channel <-data;
+            }
+        }
+    }();
+    return order_from_network_channel, sync_from_network_channel, floor_from_network_channel, direction_from_network_channel;
+}
+
+func network_encoder(to_network_channel chan<- Message) (chan<- Order, chan<- order.Orders, chan<- int, chan<- int) {
+    order_to_network_channel := make(chan Order);
+    sync_to_network_channel := make(chan order.Orders);
+    floor_to_network_channel := make(chan int);
+    direction_to_network_channel := make(chan int);
+    go func() {
+        for {
+            select {
+            case order := <- order_to_network_channel:
+                b, err := json.Marshal(order);
+                if err != nil {
+                    fmt.Println("Could not marshal order.");
+                } else {
+                    to_network_channel <-*NewMessage(ORDER, b, nil, nil);
+                }
+            case orders := <-sync_to_network_channel:
+                b, err := json.Marshal(orders);
+                if err != nil {
+                    fmt.Println("Could not marshal order.");
+                } else {
+                    to_network_channel <-*NewMessage(SYNC, b, nil, nil);
+                }
+            case floor := <-floor_to_network_channel:
+                b, err := json.Marshal(floor);
+                if err != nil {
+                    fmt.Println("Could not marshal floor.");
+                } else {
+                    to_network_channel <-*NewMessage(FLOOR_UPDATE, b, nil, nil);
+                }
+            case direction := <-direction_to_network_channel:
+                b, err := json.Marshal(direction);
+                if err != nil {
+                    fmt.Println("Could not marshal direction.");
+                } else {
+                    to_network_channel <-*NewMessage(DIRECTION_UPDATE, b, nil, nil);
+                }
+            }
+        }
+    }();
+    return order_to_network_channel, sync_to_network_channel, floor_to_network_channel, direction_to_network_channel;
+}
+
+func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan chan int, chan chan int, chan chan int) {
+    local_addr, to_network_channel, from_network_channel, _, _ := network.Manager("33223")
+
+    order_to_network_channel,
+    sync_to_network_channel,
+    floor_to_network_channel,
+    direction_to_network_channel := network_encoder(to_network_channel);
+
+    order_from_network_channel,
+    sync_from_network_channel,
+    floor_from_network_channel,
+    direction_from_network_channel := network_decoder(from_network_channel);
+
+    order_channel := make(chan Order);
+    floor_channel := make(chan int);
+    stop_request_channel := make(chan chan int);
+    direction_request_channel := make(chan chan int);
+    order_request_channel := make(chan chan int);
+
+    hall := [4][2]bool{};
+    carts := make(map[string]cart);
+    func add_order(order Order, addr string, hall [4][2]bool, carts map[string]cart) {
+        if data.o.Button == COMMAND {
+            if addr == local_addr {
+                light_channel <-data.o;
+            }
+            carts[addr].commands[order.Floor] = order.Value;
+        } else {
+            light_channel <-data.o;
+            hall[order.Floor][order.Button] = value;
+        }
+    }
+
+    func map_key_exists(carts map[string]cart, addr string) {
+        _, ok := carts[addr];
+        return ok;
+    }
+
+    go func() {
+        floor := -1;
+        for {
+            //system.Print();
+            select {
+            case data := <-order_from_network_channel:
+                if !map_key_exists(carts, addr) {
+                    carts[addr] = cart{};
+                }
+                add_order(data.o, data.a, hall, carts);
+            case data := <-sync_from_network_channel:
+                if data.a == local_addr {
+                    hall = data.s.hall;
+                    carts = data.s.carts;
+                } else {
+                    //sync(system
+                    sync_to_network_channel <-data.s;
+                }
+            case data := <-floor_from_network_channel:
+                if !map_key_exists(carts, addr) {
+                    system.AddCartToMap(order.NewCart(), data.a)
+                }
+                carts[data.a].Floor = data.v;
+            case data := <-direction_from_network_channel:
+                if !system.CheckIfCart(data.a) {
+                    carts[addr] = cart{};
+                }
+                carts[addr].Direction = data.v;
+            case order := <-order_channel:
+                add_order(order, local_addr, hall, carts);
+                order_to_network_channel <-order;
+            case floor = <-floor_channel:
+                carts[local_addr].Floor = floor;
+                floor_to_network_channel <-floor;
+            case response_channel := <-stop_request_channel:
+                floor_action := system.CheckFloorAction(floor, system.CurDir(local_addr));
+                if floor_action == order.OPEN_DOOR {
+                    order_to_network_channel <-Order{Button: order.COMMAND, Floor: floor, Value: false}
+                }
+                response_channel <-floor_action;
+            case response_channel := <-direction_request_channel:
+                direction := system.GetDirection()
+                system.SetDir(local_addr, direction)
+                direction_to_network_channel <-direction;
+
+                button := order.UP
+                floor := system.CurFloor(local_addr)
+                if direction == elev.DOWN {
+                    button = order.DOWN
+                } else if direction == elev.STOP {
+                    order_to_network_channel <-Order{Button: order.DOWN, Floor: floor, Value: false}
+                }
+                order_to_network_channel <-Order{Button: button, Floor: floor, Value: false}
+                //carts[local_addr].Direction = direction;
+                response_channel <- direction
+            case response_channel := <-order_request_channel:
+                if new_order {
+                    response_channel <-1;
+                    new_order = false;
+                } else {
+                    response_channel <-0;
+                }
+            }
+        }
+    }()
+    return order_channel, floor_channel, stop_request_channel, direction_request_channel, order_request_channel;
+}
+
+
 //SAVED FOR LATER
 func NewOrders(local_addr string) *Orders {
     o := &Orders{local_addr: local_addr, carts: make(map[string]*cart)}
@@ -96,7 +286,7 @@ func (self Orders) checkIfHallOrder(floor, direction int) bool {
         return  self.hall[floor][0] ||
                 self.hall[floor][1]
     }
-    
+
 }
 
 func (self *Orders) SetCommand(addr string, floor int, value bool) {
@@ -137,9 +327,7 @@ func (self Orders) Alone() bool {
 func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
     fmt.Println("Floor action on floor", orderFloor, "and direction", orderDirection)
     if  self.carts[self.local_addr].checkIfCommand(orderFloor) ||
-        self.checkIfHallOrder(orderFloor, orderDirection) ||
-        orderFloor == N_FLOORS -1 && self.checkIfHallOrder(orderFloor, -orderDirection) ||
-        orderFloor == 0 && self.checkIfHallOrder(orderFloor, -orderDirection) {
+        self.checkIfHallOrder(orderFloor, orderDirection) {
         fmt.Println("Traitor lines.")
         return OPEN_DOOR;
     } else if !self.CheckIfOrdersInDirection(orderFloor, orderDirection) {
@@ -152,17 +340,21 @@ func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
     }
 }
 
+func check_floor_action(floor, direction int) {
+
+}
+
 func (self Orders) get_orders_in_direction(floor, direction int) []Order {
     orders := []Order{};
     if direction == 0 {
         return orders;
     }
-    for f := floor; f != -1 && f != N_FLOORS; f += direction {
+    for f := floor + direction; f != -1 && f != N_FLOORS; f += direction {
         fmt.Println("Looking for order at floor", f, "and direction", direction);
-        if self.checkIfHallOrder(f, UP) {
+        if self.checkIfHallOrder(f, 1) {
             orders = append(orders, Order{Button: UP, Floor: f, Value: true});
         }
-        if self.checkIfHallOrder(f, DOWN) {
+        if self.checkIfHallOrder(f, -1) {
             orders = append(orders, Order{Button: DOWN, Floor: f, Value: true});
         }
     }
@@ -301,7 +493,7 @@ func max(a, b int) int {
     } else {
         return b;
     }
-} 
+}
 
 func sign(a int) int {
     if a > 0 {

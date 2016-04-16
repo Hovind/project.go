@@ -16,7 +16,7 @@ const (
     N_FLOORS            = 4
     N_BUTTONS           = 3
     MOTOR_SPEED         = 2800
-    
+
     MOTOR               = (0x100+0)
 
     BUTTON_DOWN2        = (0x200+0)
@@ -122,13 +122,13 @@ func SetFloorIndicator(floor int) {
         io.SetBit(LIGHT_FLOOR_IND1);
     } else {
         io.ClearBit(LIGHT_FLOOR_IND1);
-    }    
+    }
 
     if (floor & 0x01 != 0) {
         io.SetBit(LIGHT_FLOOR_IND2);
     } else {
         io.ClearBit(LIGHT_FLOOR_IND2);
-    }    
+    }
 }
 
 func SetDoorOpenLamp(value bool) {
@@ -226,20 +226,16 @@ func Stop_checker() <-chan bool {
         }
     }();
     return stop_signal_channel;
-    
+
 }
 
-func checkFloorSensors(floorSignalCh chan int) {
-    floorSensor := getFloorSensorSignal();
-    if floorSensor != -1 {
-        floorSignalCh <- floorSensor;
-        //<-floorSignalCh; //Wait
-    }
-}
-
-func checkStopSignal(stopSignalCh chan bool) {
-    stopSignal := io.ReadBit(BUTTON_STOP);
-    if stopSignal {
-        stopSignalCh <- stopSignal;
-    }
+func Light_manager() chan<- Order {
+    light_channel := make(chan Order);
+    go func() {
+        for {
+            order := <-light_channel;
+            SetButtonLamp(order.Button, order.Floor, order.Value);
+        }
+    }();
+    return light_channel;
 }
