@@ -39,7 +39,7 @@ type Orders struct {
 //SAVED FOR LATER
 func NewOrders(local_addr string) *Orders {
     o := &Orders{Addr: local_addr, Carts: make(map[string]*cart)}
-    o.Carts[local_addr] = &cart{Floor: -1, Direction: -1}
+    o.Carts[local_addr] = &cart{Floor: 0, Direction: -1}
     return o
 }
 
@@ -144,7 +144,7 @@ func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
         !self.search_for_orders_in_direction(orderFloor, orderDirection) &&
         self.Carts[self.Addr].furthest_command(orderFloor, orderDirection) == orderFloor {
         return OPEN_DOOR;
-    } else if !self.search_for_orders_in_direction(orderFloor, orderDirection) {
+    } else if !self.search_for_orders_in_direction(orderFloor, orderDirection) && self.Carts[self.Addr].furthest_command(orderFloor, orderDirection) == orderFloor {
         return STOP;
     } else {
         return CONTINUE;
@@ -402,11 +402,12 @@ func (self Orders) GetDirection() int {
     }
 }
 
-func (self *Orders) Sync(s *Orders, light_channel chan<- Order) {
+func (self *Orders) Sync(s *Orders, new_order *bool, light_channel chan<- Order) {
     for f := range s.Hall {
         for b := range s.Hall[f] {
             if s.Hall[f][b] {
                 light_channel <-Order{Button: b, Floor: f, Value: true};
+                *new_order = true;
             }
             s.Hall[f][b] = self.Hall[f][b] || s.Hall[f][b];
             self.Hall[f][b] = s.Hall[f][b]
@@ -419,6 +420,9 @@ func (self *Orders) Sync(s *Orders, light_channel chan<- Order) {
         if addr != self.Addr {
             self.Carts[addr] = cart;
         }
+    }
+    if s.Carts == nil {
+        s.Carts = make(map[string]*cart);
     }
     s.Carts[self.Addr] = self.Carts[self.Addr];
 }

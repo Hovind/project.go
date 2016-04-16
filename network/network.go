@@ -29,9 +29,10 @@ func resolve_local_addr(broadcast_addr *net.UDPAddr, broadcast_port string) *net
     return local_addr;
 }
 
-func listening_worker(socket *net.UDPConn, local_addr *net.UDPAddr) <-chan Message {
+func listening_worker(socket *net.UDPConn, local_addr *net.UDPAddr) (chan Message, <-chan Message) {
     local_addrs, _ := net.InterfaceAddrs();
 
+    from_network_channel := make(chan Message, 10);
     rcv_channel := make(chan Message);
     go func() {
         b := make([]byte, 1024);
@@ -45,10 +46,10 @@ func listening_worker(socket *net.UDPConn, local_addr *net.UDPAddr) <-chan Messa
                 if err != nil {
                     fmt.Println("Could not unmarshal message.");
                 } else if addr_is_remote(local_addrs, addr) && n > 0 {
-                    if msg.Code == SYNC {
-                        fmt.Println("GOT A SYNC YO!");
+                    if msg.Code <= SYNC {
+                        from_network_channel<-msg;
                     }
-                    if msg.Origin.IP.String() != local_addr.IP.String() || msg.Code == SYNC {
+                    if msg.Origin.IP.String() != local_addr.IP.String() {
                         fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
                         rcv_channel <-msg;
                     } else {
@@ -58,7 +59,7 @@ func listening_worker(socket *net.UDPConn, local_addr *net.UDPAddr) <-chan Messa
             }
         }
     }();
-    return rcv_channel;
+    return from_network_channel, rcv_channel;
 }
 
 func send(msg Message, socket *net.UDPConn, addr *net.UDPAddr) (error) {
@@ -96,6 +97,7 @@ func find_network(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn, 
                 return head_addr;
         }
         case msg := <-to_network_channel:
+            fmt.Println("?")
             msg.Origin = local_addr;
             from_network_channel <-msg;
         case <-time.After(5 * time.Second):
@@ -106,7 +108,7 @@ func find_network(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn, 
 
 
 func send_sync(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn) error {
-    orders := order.Orders{Addr: local_addr.IP.String()};
+    orders := *order.NewOrders(local_addr.IP.String());
     b, err := json.Marshal(orders);
     if err != nil {
         return err;
@@ -115,18 +117,22 @@ func send_sync(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn) error {
     return send(msg, socket, head_addr);
 }
 
-func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, to_network_channel, from_network_channel chan Message, rcv_channel <-chan Message) {
-    tail_timeout := timer.New();
+func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, to_network_channel, rcv_channel <-chan Message) {
+    tail := timer.New();
+    keep_alive := timer.New();
     send_sync(local_addr, head_addr, socket);
     for {
         select {
         case msg := <-to_network_channel:
+            fmt.Println("FFS!")
             msg.Origin = local_addr;
             send(msg, socket, head_addr);
         case msg :=  <-rcv_channel:
-            tail_timeout.Stop();
+            fmt.Println("Stopping timer.")
+            tail.Stop();
+            keep_alive.Start(2 * time.Second);
             switch msg.Code {
-            case KEEP_ALIVE, TAIL_REQUEST:
+            case KEEP_ALIVE, TAIL_REQUEST, SYNC:
                 break;
             case CONNECTION:
                 if head_addr == nil || head_addr.String() == msg.Target.String() {
@@ -147,13 +153,10 @@ func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, t
                 time.Sleep(time.Duration(sleep_multiplier)*time.Second);
                 fmt.Println("Done sleeping.");
                 return;
-            case SYNC:
-                from_network_channel <-msg;
             default:
-                from_network_channel <-msg;
                 send(msg, socket, head_addr);
             }
-        case <-tail_timeout.Timer.C:
+        case <-tail.Timer.C:
             fmt.Println("Breaking cycle.");
             sleep_multiplier := 1;
             msg := *NewMessage(TAIL_DEAD, []byte{byte(sleep_multiplier)}, local_addr, nil);
@@ -163,11 +166,13 @@ func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, t
             time.Sleep(time.Duration(sleep_multiplier)*time.Second);
             fmt.Println("Done sleeping.");
             return;
-        case <-time.After(4 * time.Second):
+        case <-keep_alive.Timer.C:
+            fmt.Println("KEEPALIVE!")
             msg := *NewMessage(KEEP_ALIVE, nil, local_addr, nil);
             send(msg, socket, head_addr);
-            if !tail_timeout.Running {
-                tail_timeout.Start(10 * time.Second);
+            if !tail.Running {
+                fmt.Println("Starting timer.")
+                tail.Start(10 * time.Second);
             }
         }
     }
@@ -186,15 +191,13 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message) {
         fmt.Println("Socket has been created:", socket.LocalAddr().String());
     }
 
-    rcv_channel := listening_worker(socket, local_addr);
-
+    from_network_channel, rcv_channel := listening_worker(socket, local_addr);
     to_network_channel := make(chan Message, 10);
-    from_network_channel := make(chan Message, 10);
     go func() {
         for {
             head_addr := find_network(local_addr, broadcast_addr, socket, to_network_channel, from_network_channel, rcv_channel);
             fmt.Println("Head:", head_addr);
-            maintain_network(local_addr, head_addr, socket, to_network_channel, from_network_channel, rcv_channel);
+            maintain_network(local_addr, head_addr, socket, to_network_channel, rcv_channel);
         }
     }();
     return local_addr.IP.String(), to_network_channel, from_network_channel;
