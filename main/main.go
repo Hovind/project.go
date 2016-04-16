@@ -123,10 +123,10 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
 
     system := order.NewOrders(local_addr)
     go func() {
-        floor := -1;
+        floor := 0;
         new_order := false;
         for {
-            //system.Print();
+            system.Print();
             select {
             case data := <-order_from_network_channel:
                 if !system.CheckIfCart(data.a) {
@@ -143,8 +143,6 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
                     //hall[order.Floor][order.Button] = value;
                 }
             case data := <-sync_from_network_channel:
-                fmt.Println("SYNC OBJECT:", data.s)
-                fmt.Println(data.s.Addr, "vs", local_addr, data.s.Addr == local_addr)
                 if data.s.Addr == local_addr {
                     system.Sync(&data.s, &new_order, light_channel);
                 } else {
@@ -213,9 +211,10 @@ func light_manager() chan<- Order {
 func main() {
     door_open := false;
     door_timer := timer.New();
+    active_timer := timer.New();
 
     elev.Init();
-    elev.SetMotorDirection(elev.DOWN);
+    set_direction(elev.DOWN, active_timer);
 
     button_channel := elev.Button_checker();
     floor_sensor_channel := elev.Floor_checker();
@@ -239,37 +238,54 @@ func main() {
             floor_channel <-floor;
             floor_action := request(stop_request_channel);
             if floor_action == order.OPEN_DOOR {
-                open_door(door_timer, &door_open);
+                open_door(door_timer, active_timer, &door_open);
+                direction = elev.STOP;
             } else if floor_action == order.STOP {
-                elev.SetMotorDirection(elev.STOP);
+                stop(active_timer);
+                direction = elev.STOP;
             }
-            direction = elev.STOP;
         case <-stop_button_channel:
-            elev.SetMotorDirection(elev.STOP);
+            stop(active_timer);
         case <-door_timer.Timer.C:
-            fmt.Println("Closing door!")
-            door_open = false;
-            elev.SetDoorOpenLamp(false);
+            close_door(&door_open);
             direction = request(direction_request_channel);
-            elev.SetMotorDirection(direction);
+            set_direction(direction, active_timer);
+        case <-active_timer.Timer.C:
+            stop(active_timer);
+            return;
         case <-time.After(500*time.Millisecond):
             floor_action := request(stop_request_channel);
             if !door_open && floor_action == order.OPEN_DOOR && direction == elev.STOP {
-                open_door(door_timer, &door_open);
+                open_door(door_timer, active_timer, &door_open);
             } else if !door_open && direction == elev.STOP {
                 direction = request(direction_request_channel);
-                elev.SetMotorDirection(direction);
+                fmt.Println("DIR", direction)
+                set_direction(direction, active_timer);
             }
         }
     }
 }
 
-func open_door(door_timer *timer.Timer, door_open *bool) {
+func stop(active_timer *timer.Timer) {
+    elev.SetMotorDirection(elev.STOP);
+}
+
+func close_door(door_open *bool) {
+    *door_open = false;
+    elev.SetDoorOpenLamp(false);
+}
+
+func open_door(door_timer, active_timer *timer.Timer, door_open *bool) {
     *door_open = true;
+    elev.SetDoorOpenLamp(true);
     elev.SetMotorDirection(elev.STOP);
     door_timer.Start(3*time.Second);
-    elev.SetDoorOpenLamp(true);
-    fmt.Println("Opening door!");
+    active_timer.Stop();
+}
+
+func set_direction(direction int, active_timer *timer.Timer) {
+    elev.SetMotorDirection(direction);
+    active_timer.Start(10 * time.Second);
 }
 
 func request(request_channel chan chan int) int {

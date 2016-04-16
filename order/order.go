@@ -27,6 +27,7 @@ const (
 type cart struct {
     Floor, Direction int
     Commands         [4]bool
+    Active bool
 }
 
 type Orders struct {
@@ -39,7 +40,7 @@ type Orders struct {
 //SAVED FOR LATER
 func NewOrders(local_addr string) *Orders {
     o := &Orders{Addr: local_addr, Carts: make(map[string]*cart)}
-    o.Carts[local_addr] = &cart{Floor: 0, Direction: -1}
+    o.Carts[local_addr] = &cart{Floor: 0, Direction: 0}
     return o
 }
 
@@ -182,83 +183,6 @@ func (self Orders) search_for_orders_in_direction(floor, direction int) bool {
     return false;
 }
 
-/*
-func (self Orders) CheckIfOrdersInDirection(floor, direction int) bool {
-    if direction == 0 {
-        return false
-    }
-    for f := floor + direction; f != N_FLOORS && f != -1; f += direction {
-        if self.Carts[self.Addr].checkIfCommand(f) || self.checkIfHallOrder(f, -1) || self.checkIfHallOrder(f, 1) {
-            return true
-        }
-    }
-    return false
-}
-
-
-func (self Orders) addedCostForElevator(cart *cart, orderFloor int, orderDirection int) int {
-    turnFloor := cart.curFloor()
-    lastFloor := turnFloor
-    if cart.curDir() == 0 {
-        return abs(cart.curFloor()-orderFloor) * travelTime
-    }
-    for floor := cart.curFloor(); floor < N_FLOORS; floor += cart.curDir() {
-        if floor < 0 {
-            break
-        } else if floor == orderFloor && cart.curDir() == orderDirection {
-            return 0
-        } else if cart.checkIfCommand(floor) {
-            turnFloor = floor
-        }
-    }
-    for floor := (turnFloor - cart.curDir()); floor < N_FLOORS; floor -= cart.curDir() {
-        if floor < 0 {
-            break
-        } else if floor == orderFloor {
-            return 0
-        } else if cart.checkIfCommand(floor) {
-            lastFloor = floor
-        }
-    }
-    return abs(lastFloor-orderFloor) * travelTime
-}
-
-func (self Orders) costForClient(cart *cart, orderFloor int, orderDirection int) int {
-    stops := 0
-    turnFloor := cart.curFloor()
-    noStops := true
-    if cart.curDir() == 0 {
-        return abs(orderFloor-cart.curFloor()) * travelTime
-    }
-    for floor := cart.curFloor(); floor < N_FLOORS; floor += cart.curDir() {
-        if floor < 0 {
-            break
-        } else if floor == orderFloor && orderDirection == cart.curDir() || floor == 0 || floor == N_FLOORS -1 {
-            return abs(cart.curFloor()-floor)*travelTime + stops*stopTime
-        } else if cart.checkIfCommand(floor) {
-            stops += 1
-            turnFloor = floor
-            noStops = false
-        }
-    }
-    floor := turnFloor - 1
-    for floor < N_FLOORS {
-        if floor < 0 {
-            if noStops {
-                return abs(cart.curFloor() - orderFloor)*travelTime;
-            }
-            return (abs(cart.curFloor()-turnFloor)+abs(floor-orderFloor)+N_FLOORS-1)*travelTime + stops*stopTime
-        } else if floor == orderFloor && orderDirection == -cart.curDir() || floor == 0 || floor == N_FLOORS -1 {
-            return (abs(cart.curFloor()-turnFloor)+abs(floor-orderFloor))*travelTime + stops*stopTime
-        } else if cart.checkIfCommand(floor) {
-            stops += 1
-            noStops = false
-        }
-        floor -= cart.curDir()
-    }
-    return 0
-}*/
-
 
 func (self cart) furthest_command(floor, direction int) int {
     if direction == /*elev.STOP*/0 {
@@ -332,7 +256,6 @@ func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
     lowestCost := 300
     bestCart_addr := ""
     for addr, cart := range self.Carts {
-        //clientCost := self.costForClient(cart, orderFloor, orderDirection)
         addedCost := cart.cost(orderFloor, orderDirection) - cart.cost(cart.curFloor(), cart.curDir());//self.addedCostForElevator(cart, orderFloor, orderDirection)
         cost := /*clientCost*3*/ + addedCost*1
         fmt.Println("IP:", addr, "Cost:", cost);
@@ -340,52 +263,11 @@ func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
             lowestCost = cost
             bestCart_addr = addr
         }
+    //clientCost := self.costForClient(cart, orderFloor, orderDirection)
+
     }
     return bestCart_addr == self.Addr
 }
-/*
-func (self Orders) GetDirection() int {
-    curDir := self.Carts[self.Addr].curDir()
-    curFloor := self.Carts[self.Addr].curFloor()
-    iterateDirection := curDir
-    if iterateDirection == 0 {
-        iterateDirection = 1
-    }
-    floor := curFloor + iterateDirection;
-    for floor < N_FLOORS {
-        if floor < 0 {
-            break
-        } else if self.Carts[self.Addr].checkIfCommand(floor) {
-            fmt.Println("Found command in dir")
-            return iterateDirection
-        } else if (self.checkIfHallOrder(floor, iterateDirection) &&
-            (self.orderIsBestForMe(floor, iterateDirection))) ||
-            (self.checkIfHallOrder(floor, -iterateDirection) &&
-            (self.orderIsBestForMe(floor, -iterateDirection))) {
-            fmt.Println("Found order for me in direction")
-            return iterateDirection
-        }
-        floor += iterateDirection
-    }
-    floor = curFloor - iterateDirection
-    for floor < N_FLOORS {
-        if floor < 0 {
-            break
-        } else if self.Carts[self.Addr].checkIfCommand(floor) {
-            fmt.Println("Command in -dir, not in dir")
-            return -iterateDirection
-        } else if (self.checkIfHallOrder(floor, iterateDirection) &&
-            (self.orderIsBestForMe(floor, iterateDirection))) ||
-            (self.checkIfHallOrder(floor, -iterateDirection) &&
-                (self.orderIsBestForMe(floor, -iterateDirection))) {
-            fmt.Println("Found order for me in -dir, not command or in dir.")
-            return -iterateDirection
-        }
-        floor -= iterateDirection
-    }
-    fmt.Println("Found no orders.")
-    return 0
-}*/
 
 func (self Orders) GetDirection() int {
     direction := self.CurDir(self.Addr);
@@ -413,16 +295,11 @@ func (self *Orders) Sync(s *Orders, new_order *bool, light_channel chan<- Order)
             self.Hall[f][b] = s.Hall[f][b]
         }
     }
-    if self.Carts == nil {
-        self.Carts = make(map[string]*cart)
-    }
+    c := self.Carts[self.Addr]
+    self.Carts = make(map[string]*cart)
     for addr, cart := range s.Carts {
-        if addr != self.Addr {
-            self.Carts[addr] = cart;
-        }
+        self.Carts[addr] = cart;
     }
-    if s.Carts == nil {
-        s.Carts = make(map[string]*cart);
-    }
-    s.Carts[self.Addr] = self.Carts[self.Addr];
+    self.Carts[self.Addr] = c;
+    s.Carts[self.Addr] = c;
 }

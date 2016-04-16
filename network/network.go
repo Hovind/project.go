@@ -83,6 +83,7 @@ func request_head(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn) 
 }
 
 func find_network(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn, to_network_channel, from_network_channel chan Message, rcv_channel <-chan Message) *net.UDPAddr {
+    desync(local_addr, from_network_channel);
     request_head(local_addr, broadcast_addr, socket);
     for {
         select {
@@ -97,7 +98,6 @@ func find_network(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn, 
                 return head_addr;
         }
         case msg := <-to_network_channel:
-            fmt.Println("?")
             msg.Origin = local_addr;
             from_network_channel <-msg;
         case <-time.After(5 * time.Second):
@@ -106,6 +106,15 @@ func find_network(local_addr, broadcast_addr *net.UDPAddr, socket *net.UDPConn, 
     }
 }
 
+func desync(local_addr *net.UDPAddr, from_network_channel chan<- Message) error {
+    orders := *order.NewOrders(local_addr.IP.String());
+    b, err := json.Marshal(orders);
+    if err != nil {
+        return err;
+    }
+    from_network_channel <-*NewMessage(SYNC, b, local_addr, nil);
+    return nil;
+}
 
 func send_sync(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn) error {
     orders := *order.NewOrders(local_addr.IP.String());
@@ -124,11 +133,9 @@ func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, t
     for {
         select {
         case msg := <-to_network_channel:
-            fmt.Println("FFS!")
             msg.Origin = local_addr;
             send(msg, socket, head_addr);
         case msg :=  <-rcv_channel:
-            fmt.Println("Stopping timer.")
             tail.Stop();
             keep_alive.Start(2 * time.Second);
             switch msg.Code {
@@ -167,7 +174,6 @@ func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, t
             fmt.Println("Done sleeping.");
             return;
         case <-keep_alive.Timer.C:
-            fmt.Println("KEEPALIVE!")
             msg := *NewMessage(KEEP_ALIVE, nil, local_addr, nil);
             send(msg, socket, head_addr);
             if !tail.Running {
