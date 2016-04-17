@@ -46,9 +46,9 @@ func listening_worker(socket *net.UDPConn, local_addr *net.UDPAddr) (chan Messag
                 } else if addr_is_remote(local_addrs, addr) && n > 0 {
                     if msg.Code <= SYNC {
                         from_network_channel<-msg;
+                        //fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
                     }
                     if msg.Origin.IP.String() != local_addr.IP.String() {
-                        fmt.Println("Received message with code", msg.Code, "with body", msg.Body, "from", addr.String());
                         rcv_channel <-msg;
                     } else {
                         rcv_channel <-*New_message(KEEP_ALIVE, nil, nil, nil);
@@ -70,7 +70,7 @@ func send(msg Message, socket *net.UDPConn, addr *net.UDPAddr) (error) {
     if err != nil {
         fmt.Println("Could not send:", err.Error());
     } else {
-        fmt.Println("Sent message with code", msg.Code, "and body", msg.Body, "to:", addr.String());
+        //fmt.Println("Sent message with code", msg.Code, "and body", msg.Body, "to:", addr.String());
     }
     return err;
 }

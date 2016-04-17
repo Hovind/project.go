@@ -1,16 +1,21 @@
 package main
 
 import (
+    "fmt"
+    "os"
     "time"
-    . "project.go/obj"
     "project.go/elev"
     "project.go/ord"
     "project.go/utils"
+    . "project.go/obj"
 )
 
-
-
 func main() {
+    if len(os.Args) < 2 {
+        fmt.Println("Please provide port.");
+        return;
+    }
+    port := os.Args[1];
     door_timer := utils.New_timer();
     active_timer := utils.New_timer();
 
@@ -22,7 +27,7 @@ func main() {
     stop_button_channel := elev.Stop_checker();
     light_channel := elev.Light_manager();
 
-    order_channel, floor_channel, stop_request_channel, direction_request_channel := ord.Manager(light_channel);
+    order_channel, floor_channel, stop_request_channel, direction_request_channel := ord.Manager(port, light_channel);
 
     door_open := false;
     floor := 0;

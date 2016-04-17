@@ -1,8 +1,8 @@
 package ord
 
 import (
-    . "project.go/obj"
     "project.go/utils"
+    . "project.go/obj"
 )
 
 const (

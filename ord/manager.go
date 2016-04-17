@@ -89,8 +89,8 @@ func network_encoder(to_network_channel chan<- Message) (chan<- Order, chan<- Or
     return order_to_network_channel, sync_to_network_channel, floor_to_network_channel, direction_to_network_channel;
 }
 
-func Manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan chan int, chan chan int) {
-    local_addr, to_network_channel, from_network_channel := network.Manager("33223")
+func Manager(port string, light_channel chan<- Order) (chan<- Order, chan<- int, chan chan int, chan chan int) {
+    local_addr, to_network_channel, from_network_channel := network.Manager(port)
 
     order_to_network_channel,
     sync_to_network_channel,
@@ -113,10 +113,6 @@ func Manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan chan in
     go func() {
         floor := 0;
         for {
-            for addr, value := range cart_map {
-                fmt.Println(addr, "->", value);
-            }
-            fmt.Println("Hall:", hall);
             select {
             case data := <-order_from_network_channel:
                 if _, ok := cart_map[data.a]; !ok {
@@ -132,9 +128,7 @@ func Manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan chan in
                     hall[data.o.Floor][data.o.Button] = data.o.Value;
                 }
             case data := <-sync_from_network_channel:
-                fmt.Println("SYNC FROM:", data.a);
                 if data.s.Addr == local_addr {
-                    fmt.Println("SYNCING ...");
                     sync(&data.s, &hall, cart_map, local_addr, light_channel)
                 } else {
                     sync(New_orders(local_addr, hall, cart_map), &data.s.Hall, data.s.Carts, data.s.Addr, light_channel);

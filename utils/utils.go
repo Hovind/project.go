@@ -43,6 +43,7 @@ func Sum(commands [N_FLOORS]bool) int {
     }
     return sum;
 }
+
 func Max(a, b int) int {
     if a > b {
         return a;
