@@ -1,10 +1,27 @@
-# Network algorithm
+### elev
 
-* NO HEAD
-	-> Connect to a node.
-	-> Broadcast "LOCAL_IP connected to HEAD_IP".
-* HAS HEAD
-	- Receives "IP" connected to HEAD_IP.
-		-> Connect to IP.
-	- Does not receive Hamilton echo.
-		-> Broadcast "HEAD_IP is mine, if you thought it was yours or have nil HEAD_IP, connect to LOCAL_IP instead".
+* Elevator driver.
+
+### io
+
+* Comedi wrapper.
+
+### main
+
+* Finite state machine.
+
+### network
+
+* Contains network mangager and algorithm.
+
+### obj
+
+* Share dependency between packages. Structs and configuration variables.
+
+### ord
+
+* Order manager, where all orders across the system are stored, network decoder and encoder converts between network messages and formats convinient for the order manager, cost function.
+
+### utils
+
+* Standard functions as well as a time.Timer-wrapper.
