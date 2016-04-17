@@ -162,13 +162,10 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
             case order := <-order_channel:
                 order_to_network_channel <-order;
             case floor = <-floor_channel:
-                fmt.Println("HEELO");
                 system.SetFloor(local_addr, floor);
-                  fmt.Println("HESELO");
                 //carts[local_addr].Floor = floor;
                 floor_to_network_channel <-floor;
             case response_channel := <-stop_request_channel:
-                fmt.Println("Floor:", floor, "Direction:", system.CurDir(local_addr))
                 floor_action := system.CheckFloorAction(floor, system.CurDir(local_addr));
                 if floor_action == order.OPEN_DOOR {
                     order_to_network_channel <-Order{Button: order.COMMAND, Floor: floor, Value: false}
@@ -250,7 +247,7 @@ func main() {
             close_door(&door_open);
             direction = request(direction_request_channel);
             set_direction(direction, active_timer);
-        case <-active_timer.Timer.C:
+        case <-active_timer.Timer.C
             stop(active_timer);
             return;
         case <-time.After(500*time.Millisecond):
@@ -259,7 +256,6 @@ func main() {
                 open_door(door_timer, active_timer, &door_open);
             } else if !door_open && direction == elev.STOP {
                 direction = request(direction_request_channel);
-                fmt.Println("DIR", direction)
                 set_direction(direction, active_timer);
             }
         }
