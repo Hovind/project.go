@@ -59,6 +59,7 @@ func main() {
             set_direction(direction, active_timer);
         case <-active_timer.Timer.C:
             stop(active_timer);
+            fmt.Println("Please refrain from sabotaging the elevator. Thank you.")
             return;
         case <-time.After(500*time.Millisecond):
             floor_action := request(stop_request_channel);
