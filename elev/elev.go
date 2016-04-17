@@ -13,8 +13,6 @@ const (
 )
 
 const (
-    N_FLOORS            = 4
-    N_BUTTONS           = 3
     MOTOR_SPEED         = 2800
 
     MOTOR               = (0x100+0)

@@ -4,6 +4,12 @@ import (
     "net"
 )
 
+const (
+    N_FLOORS     = 4
+    N_BUTTONS    = 3
+    N_DIRECTIONS = 2
+)
+
 type Order struct {
     Button, Floor int
     Value bool
@@ -17,15 +23,6 @@ type Message struct {
 
 func NewMessage(code int, body []byte, local_addr, target_addr *net.UDPAddr) *Message {
     return &Message{Code: code, Body: body, Origin: local_addr, Target: target_addr};
-}
-
-
-func (msg *Message) Hash() int {
-    hash := msg.Code;
-    for _, e := range msg.Body {
-        hash = 2*hash ^ int(e);
-    }
-    return hash;
 }
 
 const (

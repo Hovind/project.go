@@ -6,8 +6,7 @@ import (
     "strings"
     "encoding/json"
     "time"
-    //"project.go/buffer"
-    "project.go/timer"
+    "project.go/utils"
     "project.go/order"
     . "project.go/obj"
 )
@@ -127,8 +126,8 @@ func send_sync(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn) error {
 }
 
 func maintain_network(local_addr, head_addr *net.UDPAddr, socket *net.UDPConn, to_network_channel, rcv_channel <-chan Message) {
-    tail := timer.New();
-    keep_alive := timer.New();
+    tail := utils.NewTimer();
+    keep_alive := utils.NewTimer();
     send_sync(local_addr, head_addr, socket);
     for {
         select {
@@ -202,7 +201,6 @@ func Manager(broadcast_port string) (string, chan<- Message, <-chan Message) {
     go func() {
         for {
             head_addr := find_network(local_addr, broadcast_addr, socket, to_network_channel, from_network_channel, rcv_channel);
-            fmt.Println("Head:", head_addr);
             maintain_network(local_addr, head_addr, socket, to_network_channel, rcv_channel);
         }
     }();

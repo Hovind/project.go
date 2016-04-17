@@ -10,13 +10,9 @@ import (
     "project.go/network"
     . "project.go/obj"
     "project.go/order"
-    "project.go/timer"
+    "project.go/utils"
 )
 
-const (
-    N_FLOORS  = 4
-    N_BUTTONS = 3
-)
 func network_decoder(from_network_channel <-chan Message) (<-chan struct{o Order; a string}, <-chan struct{s order.Orders; a string}, <-chan struct{v int; a string}, <-chan struct{v int; a string}) {
     order_from_network_channel := make(chan struct{o Order; a string});
     sync_from_network_channel := make(chan struct{s order.Orders; a string});
@@ -206,8 +202,8 @@ func light_manager() chan<- Order {
 
 func main() {
     door_open := false;
-    door_timer := timer.New();
-    active_timer := timer.New();
+    door_timer := utils.NewTimer();
+    active_timer := utils.NewTimer();
 
     elev.Init();
     set_direction(elev.DOWN, active_timer);
@@ -261,7 +257,7 @@ func main() {
     }
 }
 
-func stop(active_timer *timer.Timer) {
+func stop(active_timer *utils.Timer) {
     elev.SetMotorDirection(elev.STOP);
 }
 
@@ -270,7 +266,7 @@ func close_door(door_open *bool) {
     elev.SetDoorOpenLamp(false);
 }
 
-func open_door(door_timer, active_timer *timer.Timer, door_open *bool) {
+func open_door(door_timer, active_timer *utils.Timer, door_open *bool) {
     *door_open = true;
     elev.SetDoorOpenLamp(true);
     elev.SetMotorDirection(elev.STOP);
@@ -278,7 +274,7 @@ func open_door(door_timer, active_timer *timer.Timer, door_open *bool) {
     active_timer.Stop();
 }
 
-func set_direction(direction int, active_timer *timer.Timer) {
+func set_direction(direction int, active_timer *utils.Timer) {
     elev.SetMotorDirection(direction);
     active_timer.Start(10 * time.Second);
 }

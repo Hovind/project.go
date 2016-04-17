@@ -1,16 +1,11 @@
 package order
 
 import (
-    "fmt"
-    //"math"
     . "project.go/obj"
+    "project.go/utils"
 )
 
-const (
-    N_FLOORS   = 4
-    travelTime = 1
-    stopTime   = 3
-)
+
 
 const (
     UP = 0 + iota
@@ -26,13 +21,13 @@ const (
 
 type cart struct {
     Floor, Direction int
-    Commands         [4]bool
+    Commands         [N_FLOORS]bool
     Active bool
 }
 
 type Orders struct {
     Addr string
-    Hall       [4][2]bool
+    Hall       [N_FLOORS][N_DIRECTIONS]bool
     Carts      map[string]*cart
 }
 
@@ -44,17 +39,6 @@ func NewOrders(local_addr string) *Orders {
     return o
 }
 
-
-func (self Orders) Print() {
-    fmt.Println("Local address:", self.Addr)
-    fmt.Println("Hall\n", self.Hall)
-    for key, value := range self.Carts {
-        fmt.Println("IP:", key)
-        fmt.Println("Cart:", value.Commands)
-        fmt.Println("Floor:", value.Floor);
-        fmt.Println("Direction:", value.Direction, "\n");
-    }
-}
 func NewCart() *cart {
     return &cart{}
 }
@@ -125,20 +109,9 @@ func (self *cart) setFloor(floor int) {
 func (self *cart) setDir(direction int) {
     self.Direction = direction
 }
-/*
-func (self Orders) CheckIfStopOnFloor(orderFloor int, orderDirection int) bool {
-    return self.Carts[self.Addr].checkIfCommand(orderFloor) ||
-        self.checkIfHallOrder(orderFloor, orderDirection) ||
-        !self.CheckIfOrdersInDirection(orderFloor, orderDirection)
-}
 
-func (self Orders) Alone() bool {
-    fmt.Println("LENGTH:", self.Carts)
-    return len(self.Carts) == 1;
-}*/
 
 func (self Orders) CheckFloorAction(orderFloor int, orderDirection int) int {
-    fmt.Println("Floor action on floor", orderFloor, "and direction", orderDirection)
     if  self.Carts[self.Addr].checkIfCommand(orderFloor) ||
         self.checkIfHallOrder(orderFloor, orderDirection) ||
         self.checkIfHallOrder(orderFloor, -orderDirection) &&
@@ -158,7 +131,6 @@ func (self Orders) get_orders_in_direction(floor, direction int) []Order {
         return orders;
     }
     for f := floor + direction; f != -1 && f != N_FLOORS; f += direction {
-        fmt.Println("Looking for order at floor", f, "and direction", direction);
         if self.checkIfHallOrder(f, 1) {
             orders = append(orders, Order{Button: UP, Floor: f, Value: true});
         }
@@ -170,7 +142,6 @@ func (self Orders) get_orders_in_direction(floor, direction int) []Order {
 }
 func (self Orders) search_for_orders_in_direction(floor, direction int) bool {
     orders_in_direction := self.get_orders_in_direction(floor, direction);
-    fmt.Println("Orders in dir:", orders_in_direction);
     for _, o := range orders_in_direction {
         direction := 1;
         if o.Button == DOWN {
@@ -201,52 +172,18 @@ func (self cart) furthest_command(floor, direction int) int {
     return floor;
 }
 
-func abs(x int) int {
-    if x < 0 {
-        return -x
-    } else {
-        return x
-    }
-}
-
-func sum(commands [N_FLOORS]bool) int {
-    sum := 0;
-    for _, e := range commands {
-        if e {
-            sum += 1;
-        }
-    }
-    return sum;
-}
-func max(a, b int) int {
-    if a > b {
-        return a;
-    } else {
-        return b;
-    }
-}
-
-func sign(a int) int {
-    if a > 0 {
-        return 1;
-    } else if a < 0 {
-        return -1;
-    } else {
-        return 0;
-    }
-}
 
 func (self cart) cost(floor, direction int) int {
     turn_floor := self.curFloor();
     final_floor := floor;
-    if self.curDir() == sign(floor - self.curFloor()) {
-        turn_floor = self.curFloor() + self.curDir() * max(abs(self.furthest_command(self.curFloor(), self.curDir()) - self.curFloor()), abs(floor - self.curFloor()))
+    if self.curDir() == utils.Sign(floor - self.curFloor()) {
+        turn_floor = self.curFloor() + self.curDir() * utils.Max(utils.Abs(self.furthest_command(self.curFloor(), self.curDir()) - self.curFloor()), utils.Abs(floor - self.curFloor()))
         final_floor = self.furthest_command(turn_floor, -self.curDir());
-    } else if self.curDir() == -sign(floor - self.curFloor()) {
+    } else if self.curDir() == -utils.Sign(floor - self.curFloor()) {
         turn_floor = self.furthest_command(self.curFloor(), self.curDir());
-        final_floor = turn_floor - self.curDir() * max(abs(self.furthest_command(turn_floor, -self.curDir()) - turn_floor), abs(floor - turn_floor));
+        final_floor = turn_floor - self.curDir() * utils.Max(utils.Abs(self.furthest_command(turn_floor, -self.curDir()) - turn_floor), utils.Abs(floor - turn_floor));
     }
-    return sum(self.Commands) * stopTime + (abs(turn_floor - self.curFloor()) + abs(final_floor - turn_floor)) * travelTime;
+    return utils.Sum(self.Commands) + (utils.Abs(turn_floor - self.curFloor()) + utils.Abs(final_floor - turn_floor));
 }
 
 
