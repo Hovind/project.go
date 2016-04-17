@@ -44,10 +44,10 @@ func main() {
 			elev.Set_floor_indicator(floor)
 			floor_channel <- floor
 			floor_action := request(stop_request_channel)
-			if floor_action == ord.OPEN_DOOR {
+			if floor_action == ord.Action.Open_door {
 				open_door(door_timer, active_timer, &door_open)
 				direction = Direction.Stop
-			} else if floor_action == ord.STOP {
+			} else if floor_action == ord.Action.Stop {
 				stop(active_timer)
 				direction = Direction.Stop
 			}
@@ -63,7 +63,7 @@ func main() {
 			return
 		case <-time.After(500 * time.Millisecond):
 			floor_action := request(stop_request_channel)
-			if !door_open && floor_action == ord.OPEN_DOOR && direction == Direction.Stop {
+			if !door_open && floor_action == ord.Action.Open_door && direction == Direction.Stop {
 				open_door(door_timer, active_timer, &door_open)
 			} else if !door_open && direction == Direction.Stop {
 				direction = request(direction_request_channel)

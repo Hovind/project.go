@@ -5,11 +5,9 @@ import (
 	"project.go/utils"
 )
 
-const (
-	CONTINUE = 0 + iota
-	STOP
-	OPEN_DOOR
-)
+var Action = struct {
+	Continue, Open_door, Stop int
+}{0, 1, 2}
 
 func check_if_hall_order(floor, direction int, hall [N_FLOORS][N_DIRECTIONS]bool) bool {
 	if direction == Direction.Down {
@@ -30,11 +28,11 @@ func get_floor_action(cart_map map[string]*Cart, hall [N_FLOORS][N_DIRECTIONS]bo
 		check_if_hall_order(floor, -direction, hall) &&
 			!search_for_orders_in_direction(floor, direction, cart_map, hall, local_addr) &&
 			furthest_command(floor, direction, cart.Commands) == floor {
-		return OPEN_DOOR
+		return Action.Open_door
 	} else if !search_for_orders_in_direction(floor, direction, cart_map, hall, local_addr) && !search_for_commands_in_direction(floor, direction, cart.Commands) {
-		return STOP
+		return Action.Stop
 	} else {
-		return CONTINUE
+		return Action.Continue
 	}
 }
 

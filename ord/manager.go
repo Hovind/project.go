@@ -188,7 +188,7 @@ func Manager(port string, light_channel chan<- Order) (chan<- Order, chan<- int,
 				floor_to_network_channel <- floor
 			case response_channel := <-stop_request_channel:
 				floor_action := get_floor_action(cart_map, hall, local_addr)
-				if floor_action == OPEN_DOOR {
+				if floor_action == Action.Open_door {
 					order_to_network_channel <- Order{Button: Button.Command, Floor: floor, Value: false}
 				}
 				response_channel <- floor_action
