@@ -8,17 +8,7 @@ import (
     "project.go/utils"
 )
 
-func light_manager() chan<- Order {
-    light_channel := make(chan Order);
 
-    go func() {
-        for {
-            order := <-light_channel;
-            elev.Set_button_lamp(order.Button, order.Floor, order.Value);
-        }
-    }();
-    return light_channel;
-}
 
 func main() {
     door_timer := utils.New_timer();
@@ -30,8 +20,8 @@ func main() {
     button_channel := elev.Button_checker();
     floor_sensor_channel := elev.Floor_checker();
     stop_button_channel := elev.Stop_checker();
+    light_channel := elev.Light_manager();
 
-    light_channel := light_manager();
     order_channel, floor_channel, stop_request_channel, direction_request_channel := ord.Manager(light_channel);
 
     door_open := false;
