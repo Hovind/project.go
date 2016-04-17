@@ -5,28 +5,26 @@ import (
 	. "project.go/obj"
 )
 
-
 type Timer struct {
     Timer *time.Timer
     Running bool
 }
 
-func NewTimer() *Timer {
-	t := time.NewTimer(0);
-	<-t.C;
-	return &Timer{Timer: t, Running: false};
+func New_timer() *Timer {
+		t := time.NewTimer(0);
+		<-t.C;
+		return &Timer{Timer: t, Running: false};
 }
 
 func (t *Timer) Start(d time.Duration) {
-	t.Timer.Reset(d);
-	t.Running = true;
+		t.Timer.Reset(d);
+		t.Running = true;
 }
 
 func (t *Timer) Stop() {
-	t.Timer.Stop();
-	t.Running = false;
+		t.Timer.Stop();
+		t.Running = false;
 }
-
 
 func Abs(x int) int {
     if x < 0 {

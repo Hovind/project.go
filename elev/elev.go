@@ -4,14 +4,6 @@ import (
     . "project.go/obj"
 )
 
-
-
-const (
-    DOWN                = -1 + iota
-    STOP
-    UP
-)
-
 const (
     MOTOR_SPEED         = 2800
 
@@ -59,13 +51,13 @@ const (
     LIGHT_UP4           = -1
 )
 
-var LAMP_CHANNEL_MATRIX = [][] int {
+var LAMP_CHANNEL_MATRIX = [][]int {
     {LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
     {LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2},
     {LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3},
     {LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4}};
 
-var BUTTON_CHANNEL_MATRIX = [][] int {
+var BUTTON_CHANNEL_MATRIX = [][]int {
     {BUTTON_UP1, BUTTON_DOWN1, BUTTON_COMMAND1},
     {BUTTON_UP2, BUTTON_DOWN2, BUTTON_COMMAND2},
     {BUTTON_UP3, BUTTON_DOWN3, BUTTON_COMMAND3},
@@ -73,86 +65,80 @@ var BUTTON_CHANNEL_MATRIX = [][] int {
 
 func Init() {
     io.Init();
-
     for f := 0; f < N_FLOORS; f++ {
         for b := 0; b < N_BUTTONS; b++ {
-            SetButtonLamp(b, f, false);
+            Set_button_lamp(b, f, false);
         }
     }
-    SetStopLamp(false);
-    SetDoorOpenLamp(false);
-    SetFloorIndicator(0);
+    Set_stop_lamp(false);
+    Set_door_open_lamp(false);
+    Set_floor_indicator(0);
 }
 
 
-func SetMotorDirection(dirn int) {
+func Set_motor_direction(dirn int) {
     if dirn == 0 {
-        io.WriteAnalog(MOTOR, 0);
+        io.Write_analog(MOTOR, 0);
     } else if dirn > 0 {
-        io.ClearBit(MOTOR_DIR);
-        io.WriteAnalog(MOTOR, MOTOR_SPEED);
+        io.Clear_bit(MOTOR_DIR);
+        io.Write_analog(MOTOR, MOTOR_SPEED);
     } else if dirn < 0 {
-        io.SetBit(MOTOR_DIR);
-        io.WriteAnalog(MOTOR, MOTOR_SPEED);
+        io.Set_bit(MOTOR_DIR);
+        io.Write_analog(MOTOR, MOTOR_SPEED);
     }
 }
 
-
-func SetButtonLamp(button int, floor int, value bool) {
+func Set_button_lamp(button int, floor int, value bool) {
     if (value) {
-        io.SetBit(LAMP_CHANNEL_MATRIX[floor][button]);
+        io.Set_bit(LAMP_CHANNEL_MATRIX[floor][button]);
     } else {
-        io.ClearBit(LAMP_CHANNEL_MATRIX[floor][button]);
+        io.Clear_bit(LAMP_CHANNEL_MATRIX[floor][button]);
     }
 }
 
-
-func SetFloorIndicator(floor int) {
+func Set_floor_indicator(floor int) {
     // Binary encoding. One light must always be on.
     if (floor & 0x02 != 0) {
-        io.SetBit(LIGHT_FLOOR_IND1);
+        io.Set_bit(LIGHT_FLOOR_IND1);
     } else {
-        io.ClearBit(LIGHT_FLOOR_IND1);
+        io.Clear_bit(LIGHT_FLOOR_IND1);
     }
 
     if (floor & 0x01 != 0) {
-        io.SetBit(LIGHT_FLOOR_IND2);
+        io.Set_bit(LIGHT_FLOOR_IND2);
     } else {
-        io.ClearBit(LIGHT_FLOOR_IND2);
+        io.Clear_bit(LIGHT_FLOOR_IND2);
     }
 }
 
-func SetDoorOpenLamp(value bool) {
+func Set_door_open_lamp(value bool) {
     if (value) {
-        io.SetBit(LIGHT_DOOR_OPEN);
+        io.Set_bit(LIGHT_DOOR_OPEN);
     } else {
-        io.ClearBit(LIGHT_DOOR_OPEN);
+        io.Clear_bit(LIGHT_DOOR_OPEN);
     }
 }
 
-
-func SetStopLamp(value bool) {
+func Set_stop_lamp(value bool) {
     if (value) {
-        io.SetBit(LIGHT_STOP);
+        io.Set_bit(LIGHT_STOP);
     } else {
-        io.ClearBit(LIGHT_STOP);
+        io.Clear_bit(LIGHT_STOP);
     }
 }
 
-
-
-func getButtonSignal(button int, floor int) bool {
-    return io.ReadBit(BUTTON_CHANNEL_MATRIX[floor][button]);
+func get_button_signal(button int, floor int) bool {
+    return io.Read_bit(BUTTON_CHANNEL_MATRIX[floor][button]);
 }
 
-func getFloorSensorSignal() int {
-    if (io.ReadBit(SENSOR_FLOOR1)) {
+func get_floor_signal_sensor() int {
+    if (io.Read_bit(SENSOR_FLOOR1)) {
         return 0;
-    } else if (io.ReadBit(SENSOR_FLOOR2)) {
+    } else if (io.Read_bit(SENSOR_FLOOR2)) {
         return 1;
-    } else if (io.ReadBit(SENSOR_FLOOR3)) {
+    } else if (io.Read_bit(SENSOR_FLOOR3)) {
         return 2;
-    } else if (io.ReadBit(SENSOR_FLOOR4)) {
+    } else if (io.Read_bit(SENSOR_FLOOR4)) {
         return 3;
     } else {
         return -1;
@@ -166,7 +152,7 @@ func Button_checker() <-chan Order {
         for {
             for floor := 0; floor < N_FLOORS; floor++ {
                 for button := 0; button < N_BUTTONS; button++ {
-                    signal := getButtonSignal(button, floor);
+                    signal := get_button_signal(button, floor);
                     if signal && !previous_button_signal[floor][button] {
                         local_order_channel <-Order{Button: button, Floor: floor, Value: true};
                     }
@@ -183,7 +169,7 @@ func Floor_checker() <-chan int {
     go func() {
         prev_floor := -1;
         for {
-            floor := getFloorSensorSignal();
+            floor := get_floor_signal_sensor();
             if floor != -1 && floor != prev_floor {
                 floor_sensor_channel <-floor;
             }
@@ -193,13 +179,12 @@ func Floor_checker() <-chan int {
     return floor_sensor_channel;
 }
 
-
 func Stop_checker() <-chan bool {
     stop_signal_channel := make(chan bool);
     go func() {
         prev_stop_signal := false;
         for {
-            stop_signal := io.ReadBit(BUTTON_STOP);
+            stop_signal := io.Read_bit(BUTTON_STOP);
             if stop_signal && !prev_stop_signal {
                 stop_signal_channel <- stop_signal;
             }
@@ -215,7 +200,7 @@ func Light_manager() chan<- Order {
     go func() {
         for {
             order := <-light_channel;
-            SetButtonLamp(order.Button, order.Floor, order.Value);
+            Set_button_lamp(order.Button, order.Floor, order.Value);
         }
     }();
     return light_channel;
