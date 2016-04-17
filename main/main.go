@@ -126,7 +126,6 @@ func order_manager(light_channel chan<- Order) (chan<- Order, chan<- int, chan c
         floor := 0;
         new_order := false;
         for {
-            system.Print();
             select {
             case data := <-order_from_network_channel:
                 if !system.CheckIfCart(data.a) {
@@ -247,7 +246,7 @@ func main() {
             close_door(&door_open);
             direction = request(direction_request_channel);
             set_direction(direction, active_timer);
-        case <-active_timer.Timer.C
+        case <-active_timer.Timer.C:
             stop(active_timer);
             return;
         case <-time.After(500*time.Millisecond):

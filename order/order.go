@@ -253,20 +253,19 @@ func (self cart) cost(floor, direction int) int {
 
 
 func (self Orders) orderIsBestForMe(orderFloor int, orderDirection int) bool {
-    lowestCost := 300
-    bestCart_addr := ""
+    min_weighted_cost := 0
+    best_cart_addr := ""
     for addr, cart := range self.Carts {
-        addedCost := cart.cost(orderFloor, orderDirection) - cart.cost(cart.curFloor(), cart.curDir());//self.addedCostForElevator(cart, orderFloor, orderDirection)
-        cost := /*clientCost*3*/ + addedCost*1
-        fmt.Println("IP:", addr, "Cost:", cost);
-        if cost < lowestCost || cost == lowestCost && addr < bestCart_addr {
-            lowestCost = cost
-            bestCart_addr = addr
+        previous_cost := cart.cost(cart.curFloor(), cart.curDir());
+        cost := cart.cost(orderFloor, orderDirection)
+        cost_difference :=  cost - previous_cost;
+        weighted_cost := cost_difference;
+        if best_cart_addr == "" || weighted_cost < min_weighted_cost || weighted_cost == min_weighted_cost && addr < best_cart_addr {
+            min_weighted_cost = cost
+            best_cart_addr = addr
         }
-    //clientCost := self.costForClient(cart, orderFloor, orderDirection)
-
     }
-    return bestCart_addr == self.Addr
+    return best_cart_addr == self.Addr
 }
 
 func (self Orders) GetDirection() int {
