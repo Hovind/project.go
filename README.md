@@ -12,7 +12,7 @@
 
 ### network
 
-* Contains network mangager and algorithm.
+* Contains network manager and algorithm.
 
 ### obj
 
@@ -20,7 +20,7 @@
 
 ### ord
 
-* Order manager, where all orders across the system are stored, network decoder and encoder converts between network messages and formats convinient for the order manager, cost function.
+* Order manager, where all orders across the system are stored, network decoder and encoder converts between network messages and formats convenient for the order manager, cost function.
 
 ### utils
 

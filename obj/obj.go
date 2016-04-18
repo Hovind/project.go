@@ -50,7 +50,9 @@ func New_cart() *Cart {
 
 func New_orders(local_addr string, hall [N_FLOORS][N_DIRECTIONS]bool, cart_map map[string]*Cart) *Orders {
 	o := &Orders{Addr: local_addr, Hall: hall, Carts: cart_map}
-	o.Carts[local_addr] = New_cart()
+	if _, ok := o.Carts[local_addr]; !ok {
+		o.Carts[local_addr] = New_cart()
+	}
 	return o
 }
 
